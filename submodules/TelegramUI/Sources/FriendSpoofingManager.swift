@@ -118,8 +118,7 @@ final class FriendSpoofingManager {
             }
             let restorePrevious: Signal<Never, NoError>
             if previousTargetId != targetId, let previousTargetId {
-                restorePrevious = FriendSpoofingOverlay.applyToPostbox(account: account, targetPeerId: previousTargetId)
-                |> then(account.viewTracker.peerView(previousTargetId, updateData: true) |> take(1) |> ignoreValues)
+                restorePrevious = account.viewTracker.peerView(previousTargetId, updateData: true) |> take(1) |> ignoreValues
             } else {
                 restorePrevious = .complete()
             }
@@ -139,7 +138,6 @@ final class FriendSpoofingManager {
                     }).start()
                 }
                 return restorePrevious
-                |> then(FriendSpoofingOverlay.applyToPostbox(account: account, targetPeerId: targetId))
             } else {
                 return restorePrevious
             }

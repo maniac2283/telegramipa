@@ -191,8 +191,8 @@ public enum ChatListItemContent {
             customMessageListData: CustomMessageListData? = nil
         ) {
             self.messages = messages
-            self.peer = peer
-            self.avatarPeer = avatarPeer
+            self.peer = PeerDisplayOverlay.applyRendered(peer)
+            self.avatarPeer = avatarPeer.flatMap(PeerDisplayOverlay.applyRendered)
             self.threadInfo = threadInfo
             self.combinedReadState = combinedReadState
             self.isRemovedFromTotalUnreadCount = isRemovedFromTotalUnreadCount

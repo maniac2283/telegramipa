@@ -38,12 +38,12 @@ public enum ChatTitleContent: Equatable {
 
         public init(peerId: EnginePeer.Id, peer: EngineRawPeer?, isContact: Bool, isSavedMessages: Bool, notificationSettings: TelegramPeerNotificationSettings?, peerPresences: [EnginePeer.Id: EngineRawPeerPresence], cachedData: EngineCachedPeerData?) {
             self.peerId = peerId
-            self.peer = peer
+            self.peer = peer.flatMap(PeerDisplayOverlay.apply)
             self.isContact = isContact
             self.isSavedMessages = isSavedMessages
             self.notificationSettings = notificationSettings
             self.peerPresences = peerPresences
-            self.cachedData = cachedData
+            self.cachedData = PeerDisplayOverlay.applyCached(peerId: peerId, data: cachedData)
         }
         
         public init(peerView: EngineRawPeerView) {

@@ -40,6 +40,7 @@ public enum FriendSpoofingOverlay {
             self.states.removeValue(forKey: targetPeerId)
         }
         self.lock.unlock()
+        PeerDisplayOverlay.notifyUpdated()
         if persist {
             let key = Self.defaultsKey(for: targetPeerId)
             if let state {

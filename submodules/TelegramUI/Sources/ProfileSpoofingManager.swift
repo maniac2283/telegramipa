@@ -118,10 +118,10 @@ final class ProfileSpoofingManager {
             if state == nil && previous == nil {
                 return .complete()
             }
-            return ProfileSpoofingOverlay.applyToPostbox(account: account)
-            |> then(
-                state == nil ? (account.viewTracker.peerView(accountPeerId, updateData: true) |> take(1) |> ignoreValues) : .complete()
-            )
+            if state == nil {
+                return account.viewTracker.peerView(accountPeerId, updateData: true) |> take(1) |> ignoreValues
+            }
+            return .complete()
         }).start())
         
         self.disposable.add((settings
@@ -232,12 +232,11 @@ final class ProfileSpoofingManager {
                         return next
                     }).start()
                 }
-                return ChannelSpoofingOverlay.applyToPostbox(account: account, channelId: ownedId)
+                return .complete()
             } else if let previousOwnedId {
                 self?.sourceHistoryDisposable.set(nil)
                 ChannelSpoofingOverlay.set(nil, for: previousOwnedId)
-                return ChannelSpoofingOverlay.applyToPostbox(account: account, channelId: previousOwnedId)
-                |> then(account.viewTracker.peerView(previousOwnedId, updateData: true) |> take(1) |> ignoreValues)
+                return account.viewTracker.peerView(previousOwnedId, updateData: true) |> take(1) |> ignoreValues
             } else {
                 self?.sourceHistoryDisposable.set(nil)
                 return .complete()

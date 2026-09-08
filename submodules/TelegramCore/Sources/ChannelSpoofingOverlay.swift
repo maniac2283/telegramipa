@@ -36,6 +36,7 @@ public enum ChannelSpoofingOverlay {
             self.states.removeValue(forKey: channelId)
         }
         self.lock.unlock()
+        PeerDisplayOverlay.notifyUpdated()
         if persist {
             let key = Self.defaultsKey(for: channelId)
             if let state {

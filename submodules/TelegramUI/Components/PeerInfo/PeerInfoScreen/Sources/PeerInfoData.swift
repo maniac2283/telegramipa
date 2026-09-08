@@ -556,6 +556,59 @@ final class PeerInfoScreenData {
     }
 }
 
+private func overlayPeerInfoScreenData(_ data: PeerInfoScreenData) -> PeerInfoScreenData {
+    let overlayPeerId = data.peer?.id ?? data.chatPeer?.id
+    let result = PeerInfoScreenData(
+        peer: data.peer.flatMap { PeerDisplayOverlay.applyEngine($0) },
+        chatPeer: data.chatPeer.flatMap { PeerDisplayOverlay.applyEngine($0) },
+        savedMessagesPeer: data.savedMessagesPeer,
+        cachedData: overlayPeerId.flatMap { PeerDisplayOverlay.applyCached(peerId: $0, data: data.cachedData) } ?? data.cachedData,
+        status: data.status,
+        peerNotificationSettings: data.peerNotificationSettings,
+        threadNotificationSettings: data.threadNotificationSettings,
+        globalNotificationSettings: data.globalNotificationSettings,
+        isContact: data.isContact,
+        availablePanes: data.availablePanes,
+        groupsInCommon: data.groupsInCommon,
+        linkedDiscussionPeer: data.linkedDiscussionPeer,
+        linkedMonoforumPeer: data.linkedMonoforumPeer,
+        linkedCommunityData: data.linkedCommunityData,
+        members: data.members,
+        storyListContext: data.storyListContext,
+        storyArchiveListContext: data.storyArchiveListContext,
+        botPreviewStoryListContext: data.botPreviewStoryListContext,
+        encryptionKeyFingerprint: data.encryptionKeyFingerprint,
+        globalSettings: data.globalSettings,
+        invitations: data.invitations,
+        requests: data.requests,
+        requestsContext: data.requestsContext,
+        threadData: data.threadData,
+        appConfiguration: data.appConfiguration,
+        isPowerSavingEnabled: data.isPowerSavingEnabled,
+        accountIsPremium: data.accountIsPremium,
+        hasSavedMessageTags: data.hasSavedMessageTags,
+        hasBotPreviewItems: data.hasBotPreviewItems,
+        isPremiumRequiredForStoryPosting: data.isPremiumRequiredForStoryPosting,
+        personalChannel: data.personalChannel,
+        starsState: data.starsState,
+        tonState: data.tonState,
+        starsRevenueStatsState: data.starsRevenueStatsState,
+        starsRevenueStatsContext: data.starsRevenueStatsContext,
+        revenueStatsState: data.revenueStatsState,
+        revenueStatsContext: data.revenueStatsContext,
+        profileGiftsContext: data.profileGiftsContext,
+        profileGiftsCollectionsContext: data.profileGiftsCollectionsContext,
+        premiumGiftOptions: data.premiumGiftOptions,
+        webAppPermissions: data.webAppPermissions,
+        savedMusicContext: data.savedMusicContext,
+        savedMusicState: data.savedMusicState,
+        managedByBot: data.managedByBot,
+        businessConnectedBot: data.businessConnectedBot
+    )
+    result.forceIsContact = data.forceIsContact
+    return result
+}
+
 private enum PeerInfoScreenInputUserKind {
     case user
     case bot
@@ -766,16 +819,7 @@ public func keepPeerInfoScreenDataHot(context: AccountContext, peerId: PeerId, c
 }
 
 private func peerInfoPersonalOrLinkedChannel(context: AccountContext, peerId: EnginePeer.Id, isSettings: Bool) -> Signal<PeerInfoPersonalChannelData?, NoError> {
-    let personalChannelPeerId: EnginePeer.Id
-    if peerId == context.account.peerId, let overlay = ProfileSpoofingOverlay.current(for: context.account.peerId) {
-        personalChannelPeerId = overlay.targetPeerId
-    } else if let sourceId = MessageSimulationOverlay.sourcePeerId(for: peerId) {
-        personalChannelPeerId = sourceId
-    } else if let sourceId = FriendSpoofingOverlay.sourcePeerId(for: peerId) {
-        personalChannelPeerId = sourceId
-    } else {
-        personalChannelPeerId = peerId
-    }
+    let personalChannelPeerId: EnginePeer.Id = peerId
     let personalChannel: Signal<TelegramEngine.EngineData.Item.Peer.PersonalChannel.Result, NoError> = context.engine.data.subscribe(
         TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)
     )
@@ -967,15 +1011,7 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
         tonState = .single(nil)
     }
     
-    let giftsPeerId: PeerId
-    if peerId == context.account.peerId, let overlay = ProfileSpoofingOverlay.current(for: context.account.peerId) {
-        giftsPeerId = overlay.targetPeerId
-    } else if let sourceId = FriendSpoofingOverlay.sourcePeerId(for: peerId) {
-        giftsPeerId = sourceId
-    } else {
-        giftsPeerId = peerId
-    }
-    let profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: giftsPeerId)
+    let profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: peerId)
     
     let businessConnectedBot = context.engine.data.subscribe(
         TelegramEngine.EngineData.Item.Peer.BusinessConnectedBot(id: context.account.peerId)
@@ -1114,6 +1150,10 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
             businessConnectedBot: businessConnectedBot
         )
     }
+    |> mapToSignal { data -> Signal<PeerInfoScreenData, NoError> in
+        return PeerDisplayOverlay.updated
+        |> map { _ in overlayPeerInfoScreenData(data) }
+    }
 }
 
 func peerInfoScreenData(
@@ -1201,19 +1241,9 @@ func peerInfoScreenData(
             let profileGiftsContext: ProfileGiftsContext?
             let profileGiftsCollectionsContext: ProfileGiftsCollectionsContext?
             if case .user = kind {
-                let giftsPeerId: PeerId
-                if userPeerId == context.account.peerId, let overlay = ProfileSpoofingOverlay.current(for: context.account.peerId) {
-                    giftsPeerId = overlay.targetPeerId
-                } else if let sourceId = MessageSimulationOverlay.sourcePeerId(for: userPeerId) {
-                    giftsPeerId = sourceId
-                } else if let sourceId = FriendSpoofingOverlay.sourcePeerId(for: userPeerId) {
-                    giftsPeerId = sourceId
-                } else {
-                    giftsPeerId = userPeerId
-                }
                 if isMyProfile || userPeerId != context.account.peerId {
-                    profileGiftsContext = existingProfileGiftsContext ?? ProfileGiftsContext(account: context.account, peerId: giftsPeerId)
-                    profileGiftsCollectionsContext = existingProfileGiftsCollectionsContext ?? ProfileGiftsCollectionsContext(account: context.account, peerId: giftsPeerId, allGiftsContext: profileGiftsContext)
+                    profileGiftsContext = existingProfileGiftsContext ?? ProfileGiftsContext(account: context.account, peerId: userPeerId)
+                    profileGiftsCollectionsContext = existingProfileGiftsCollectionsContext ?? ProfileGiftsCollectionsContext(account: context.account, peerId: userPeerId, allGiftsContext: profileGiftsContext)
                     
                     if switchToUpgradableGifts {
                         profileGiftsContext?.updateFilter([.displayed, .hidden, .limitedUpgradable])
@@ -1523,17 +1553,7 @@ func peerInfoScreenData(
                 webAppPermissions = .single(nil)
             }
                                     
-            let savedMusicPeerId: PeerId
-            if peerId == context.account.peerId, let overlay = ProfileSpoofingOverlay.current(for: context.account.peerId) {
-                savedMusicPeerId = overlay.targetPeerId
-            } else if let sourceId = MessageSimulationOverlay.sourcePeerId(for: peerId) {
-                savedMusicPeerId = sourceId
-            } else if let sourceId = FriendSpoofingOverlay.sourcePeerId(for: peerId) {
-                savedMusicPeerId = sourceId
-            } else {
-                savedMusicPeerId = peerId
-            }
-            let savedMusicContext = ProfileSavedMusicContext(account: context.account, peerId: savedMusicPeerId)
+            let savedMusicContext = ProfileSavedMusicContext(account: context.account, peerId: peerId)
                
             let businessConnectedBot: Signal<EnginePeer?, NoError>
             if isMyProfile {
@@ -1868,14 +1888,8 @@ func peerInfoScreenData(
                 }
             }
             
-            let giftsPeerId: PeerId
-            if let overlay = ChannelSpoofingOverlay.current(for: peerId) {
-                giftsPeerId = overlay.sourceChannelId
-            } else {
-                giftsPeerId = peerId
-            }
-            let profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: giftsPeerId)
-            let profileGiftsCollectionsContext = ProfileGiftsCollectionsContext(account: context.account, peerId: giftsPeerId, allGiftsContext: profileGiftsContext)
+            let profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: peerId)
+            let profileGiftsCollectionsContext = ProfileGiftsCollectionsContext(account: context.account, peerId: peerId, allGiftsContext: profileGiftsContext)
             
             let personalChannel = peerInfoPersonalOrLinkedChannel(context: context, peerId: peerId, isSettings: false)
             
@@ -2424,6 +2438,10 @@ func peerInfoScreenData(
             }
         }
     }
+    |> mapToSignal { data -> Signal<PeerInfoScreenData, NoError> in
+        return PeerDisplayOverlay.updated
+        |> map { _ in overlayPeerInfoScreenData(data) }
+    }
 }
 
 func peerInfoIsCopyProtected(data: PeerInfoScreenData) -> Bool {
@@ -2437,6 +2455,9 @@ func peerInfoIsCopyProtected(data: PeerInfoScreenData) -> Bool {
 }
 
 func canEditPeerInfo(context: AccountContext, peer: EnginePeer?, chatLocation: ChatLocation, threadData: MessageHistoryThreadData?) -> Bool {
+    if let peerId = peer?.id, ProfileSpoofingOverlay.current(for: peerId) != nil || ChannelSpoofingOverlay.current(for: peerId) != nil || FriendSpoofingOverlay.current(for: peerId) != nil || MessageSimulationOverlay.current(for: peerId) != nil {
+        return false
+    }
     if context.account.peerId == peer?.id {
         return true
     }
@@ -2757,6 +2778,9 @@ func peerInfoHeaderButtons(peer: EnginePeer?, cachedData: CachedPeerData?, isOpe
 }
 
 func peerInfoCanEdit(peer: EnginePeer?, chatLocation: ChatLocation, threadData: MessageHistoryThreadData?, cachedData: CachedPeerData?, isContact: Bool?) -> Bool {
+    if let peerId = peer?.id, ProfileSpoofingOverlay.current(for: peerId) != nil || ChannelSpoofingOverlay.current(for: peerId) != nil || FriendSpoofingOverlay.current(for: peerId) != nil || MessageSimulationOverlay.current(for: peerId) != nil {
+        return false
+    }
     if case let .user(user) = peer {
         if user.isDeleted {
             return false

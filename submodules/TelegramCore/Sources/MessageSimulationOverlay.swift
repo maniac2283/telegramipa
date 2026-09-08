@@ -56,6 +56,7 @@ public enum MessageSimulationOverlay {
             self.states.removeValue(forKey: simulatedPeerId)
         }
         self.lock.unlock()
+        PeerDisplayOverlay.notifyUpdated()
     }
     
     public static func applyVisual(to user: TelegramUser) -> TelegramUser {

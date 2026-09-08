@@ -522,7 +522,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                             .withUpdatedSavedMusic(mappedSavedMusic)
                                             .withUpdatedNote(mappedNote)
                                             .withUpdatedBotManagerId(botManagerId.flatMap { PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value($0)) })
-                                        return FriendSpoofingOverlay.applyCached(peerId: peerId, data: MessageSimulationOverlay.applyCached(peerId: peerId, data: ProfileSpoofingOverlay.applyCached(peerId: peerId, data: updatedCachedData)))
+                                        return updatedCachedData
                                 }
                             })
                         }
@@ -964,7 +964,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                                     .withUpdatedSendPaidMessageStars(mappedSendPaidMessageStars)
                                                     .withUpdatedMainProfileTab(mappedMainProfileTab)
                                                     .withUpdatedGuardBotId(mappedGuardBotId)
-                                                return ChannelSpoofingOverlay.applyCached(peerId: peerId, data: updatedCachedData)
+                                                return updatedCachedData
                                             })
                                         
                                             if let minAvailableMessageId = minAvailableMessageId, minAvailableMessageIdUpdated {

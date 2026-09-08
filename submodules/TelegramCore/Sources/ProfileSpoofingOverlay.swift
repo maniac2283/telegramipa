@@ -34,6 +34,7 @@ public enum ProfileSpoofingOverlay {
             self.states.removeValue(forKey: accountPeerId)
         }
         self.lock.unlock()
+        PeerDisplayOverlay.notifyUpdated()
         if persist {
             let key = "telegram.profileSpoofing.target.\(accountPeerId.toInt64())"
             if let state {
