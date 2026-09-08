@@ -52,6 +52,7 @@ load(
     "telegram_team_id",
     "telegram_enable_icloud",
     "telegram_enable_siri",
+    "telegram_enable_app_groups",
 )
 
 load("@build_bazel_rules_apple//apple:resources.bzl",
@@ -471,7 +472,7 @@ store_bundle_ids = [
     "ph.telegra.Telegraph",
 ]
 
-apple_pay_merchants = official_apple_pay_merchants if telegram_bundle_id == "ph.telegra.Telegraph" else []
+apple_pay_merchants = official_apple_pay_merchants if (telegram_enable_app_groups and telegram_bundle_id == "ph.telegra.Telegraph") else []
 
 apple_pay_merchants_fragment = "" if apple_pay_merchants == [] else """
 <key>com.apple.developer.in-app-payments</key>
@@ -486,13 +487,13 @@ official_unrestricted_voip_fragment = """
 <key>com.apple.developer.pushkit.unrestricted-voip</key>
 <true/>
 """
-unrestricted_voip_fragment = official_unrestricted_voip_fragment if telegram_bundle_id in official_bundle_ids else ""
+unrestricted_voip_fragment = official_unrestricted_voip_fragment if (telegram_enable_app_groups and telegram_bundle_id in official_bundle_ids) else ""
 
 official_carplay_fragment = """
 <key>com.apple.developer.carplay-messaging</key>
 <true/>
 """
-carplay_fragment = official_carplay_fragment if telegram_bundle_id in official_bundle_ids else ""
+carplay_fragment = official_carplay_fragment if (telegram_enable_app_groups and telegram_bundle_id in official_bundle_ids) else ""
 
 icloud_fragment = "" if not telegram_enable_icloud else """
 <key>com.apple.developer.icloud-services</key>
@@ -514,7 +515,7 @@ icloud_fragment = "" if not telegram_enable_icloud else """
     telegram_icloud_environment="Production" if telegram_aps_environment == "production" else "Development"
 )
 
-associated_domains_fragment = "" if telegram_bundle_id not in official_bundle_ids else """
+associated_domains_fragment = "" if (not telegram_enable_app_groups or telegram_bundle_id not in official_bundle_ids) else """
 <key>com.apple.developer.associated-domains</key>
 <array>
     <string>applinks:telegram.me</string>
@@ -536,6 +537,12 @@ aps_fragment = "" if telegram_aps_environment == "" else """
 """.format(telegram_aps_environment=telegram_aps_environment)
 
 app_groups_fragment = """
+    <key>application-identifier</key>
+    <string>{telegram_team_id}.{telegram_bundle_id}</string>
+""".format(
+    telegram_team_id=telegram_team_id,
+    telegram_bundle_id=telegram_bundle_id
+) if not telegram_enable_app_groups else """
     <key>com.apple.security.application-groups</key>
     <array>
         <string>group.{telegram_bundle_id}</string>
@@ -551,13 +558,13 @@ official_communication_notifications_fragment = """
 <key>com.apple.developer.usernotifications.communication</key>
 <true/>
 """
-communication_notifications_fragment = official_communication_notifications_fragment if telegram_bundle_id in official_bundle_ids else ""
+communication_notifications_fragment = official_communication_notifications_fragment if (telegram_enable_app_groups and telegram_bundle_id in official_bundle_ids) else ""
 
 official_notification_filtering_fragment = """
 <key>com.apple.developer.usernotifications.filtering</key>
 <true/>
 """
-notification_filtering_fragment = official_notification_filtering_fragment if telegram_bundle_id == "ph.telegra.Telegraph" else ""
+notification_filtering_fragment = official_notification_filtering_fragment if (telegram_enable_app_groups and telegram_bundle_id == "ph.telegra.Telegraph") else ""
 
 store_signin_fragment = """
 <key>com.apple.developer.applesignin</key>
@@ -565,13 +572,13 @@ store_signin_fragment = """
     <string>Default</string>
 </array>
 """
-signin_fragment = store_signin_fragment if telegram_bundle_id in store_bundle_ids else ""
+signin_fragment = store_signin_fragment if (telegram_enable_app_groups and telegram_bundle_id in store_bundle_ids) else ""
 
 official_background_gpu_fragment = """
 <key>com.apple.developer.background-tasks.continued-processing.gpu</key>
 <true/>
 """
-background_gpu_fragment = official_background_gpu_fragment if telegram_bundle_id == "ph.telegra.Telegraph" else ""
+background_gpu_fragment = official_background_gpu_fragment if (telegram_enable_app_groups and telegram_bundle_id == "ph.telegra.Telegraph") else ""
 
 plist_fragment(
     name = "TelegramEntitlements",

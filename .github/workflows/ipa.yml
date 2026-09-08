@@ -126,8 +126,8 @@ jobs:
               exit 1
             fi
           else
-            echo "Apple secrets not set; using official fake-codesigning"
-            cp build-system/appstore-configuration.json "${SIGNING_DIR}/configuration.json"
+            echo "Apple secrets not set; using KSign sideload configuration"
+            cp build-system/ksign-configuration.json "${SIGNING_DIR}/configuration.json"
             cp -R build-system/fake-codesigning/. "${SIGNING_DIR}/"
           fi
 
@@ -169,6 +169,7 @@ jobs:
             --configurationPath=ci-codesigning/configuration.json \
             --codesigningInformationPath=ci-codesigning \
             --configuration=release_arm64 \
+            --disableExtensions \
             --buildNumber="$BUILD_NUMBER" \
             --outputBuildArtifactsPath=build/artifacts
 

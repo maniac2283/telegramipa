@@ -281,16 +281,16 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     private let firebaseRequestVerificationSecretStream = Promise<[String: String]>([:])
     
     private var urlSessions: [URLSession] = []
+    private var sharedAppGroupIdentifier: String?
     private func urlSession(identifier: String) -> URLSession {
         if let existingSession = self.urlSessions.first(where: { $0.configuration.identifier == identifier }) {
             return existingSession
         }
-        
-        let baseAppBundleId = Bundle.main.bundleIdentifier!
-        let appGroupName = "group.\(baseAppBundleId)"
 
         let configuration = URLSessionConfiguration.background(withIdentifier: identifier)
-        configuration.sharedContainerIdentifier = appGroupName
+        if let sharedAppGroupIdentifier = self.sharedAppGroupIdentifier {
+            configuration.sharedContainerIdentifier = sharedAppGroupIdentifier
+        }
         configuration.isDiscretionary = false
         let session = URLSession(configuration: configuration, delegate: self, delegateQueue: .main)
         self.urlSessions.append(session)
@@ -528,11 +528,10 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         let appVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown"
         
         let baseAppBundleId = Bundle.main.bundleIdentifier!
-        let appGroupName = "group.\(baseAppBundleId)"
-        let maybeAppGroupUrl = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupName)
         
         let buildConfig = BuildConfig(baseAppBundleId: baseAppBundleId)
         self.buildConfig = buildConfig
+        telegramUsesICloudKeyValueStore = buildConfig.isICloudEnabled
         let signatureDict = BuildConfigExtra.signatureDict()
         
         let apiId: Int32 = buildConfig.apiId
@@ -641,20 +640,18 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             isICloudEnabled: buildConfig.isICloudEnabled
         )
         
-        let appGroupUrl: URL
-        if let existing = maybeAppGroupUrl {
-            appGroupUrl = existing
-        } else {
-            let fallback = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("telegram-data", isDirectory: true)
-            do {
-                try FileManager.default.createDirectory(at: fallback, withIntermediateDirectories: true, attributes: nil)
-            } catch {
-                self.mainWindow?.presentNative(UIAlertController(title: nil, message: "Error 2", preferredStyle: .alert))
-                return true
-            }
-            appGroupUrl = fallback
+        // Sideloaded installs (KSign/Sideloadly) often get a group URL that is not
+        // actually writable. Touching it can kill the process. Keep data in the app sandbox.
+        let sandboxDataUrl = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("telegram-data", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: sandboxDataUrl, withIntermediateDirectories: true, attributes: nil)
+        } catch {
+            self.mainWindow?.presentNative(UIAlertController(title: nil, message: "Error 2", preferredStyle: .alert))
+            return true
         }
+        let appGroupUrl = sandboxDataUrl
+        self.sharedAppGroupIdentifier = nil
         
         var isDebugConfiguration = false
         #if DEBUG
@@ -686,7 +683,11 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         }
         
         let deviceSpecificEncryptionParameters = BuildConfig.deviceSpecificEncryptionParameters(rootPath, baseAppBundleId: baseAppBundleId)
-        let encryptionParameters = ValueBoxEncryptionParameters(forceEncryptionIfNoSet: false, key: ValueBoxEncryptionParameters.Key(data: deviceSpecificEncryptionParameters.key)!, salt: ValueBoxEncryptionParameters.Salt(data: deviceSpecificEncryptionParameters.salt)!)
+        guard let encryptionKey = ValueBoxEncryptionParameters.Key(data: deviceSpecificEncryptionParameters.key), let encryptionSalt = ValueBoxEncryptionParameters.Salt(data: deviceSpecificEncryptionParameters.salt) else {
+            self.mainWindow?.presentNative(UIAlertController(title: nil, message: "Error 2", preferredStyle: .alert))
+            return true
+        }
+        let encryptionParameters = ValueBoxEncryptionParameters(forceEncryptionIfNoSet: false, key: encryptionKey, salt: encryptionSalt)
         
         TempBox.initializeShared(basePath: rootPath, processType: "app", launchSpecificId: Int64.random(in: Int64.min ... Int64.max))
         
@@ -790,7 +791,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         self.window?.makeKeyAndVisible()
         
         var hasActiveCalls: Signal<Bool, NoError> = .single(false)
-        if CallKitIntegration.isAvailable, let callKitIntegration = CallKitIntegration.shared {
+        if buildConfig.isAppStoreBuild, CallKitIntegration.isAvailable, let callKitIntegration = CallKitIntegration.shared {
             hasActiveCalls = callKitIntegration.hasActiveCalls
         }
         self.hasActiveAudioSession.set(
@@ -1061,12 +1062,14 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             return true
         }
 
-        let pushRegistry = PKPushRegistry(queue: .main)
-        if #available(iOS 9.0, *) {
-            pushRegistry.desiredPushTypes = Set([.voIP])
+        if buildConfig.isAppStoreBuild {
+            let pushRegistry = PKPushRegistry(queue: .main)
+            if #available(iOS 9.0, *) {
+                pushRegistry.desiredPushTypes = Set([.voIP])
+            }
+            self.pushRegistry = pushRegistry
+            pushRegistry.delegate = self
         }
-        self.pushRegistry = pushRegistry
-        pushRegistry.delegate = self
 
         self.accountManagerState = extractAccountManagerState(records: accountManager._internalAccountRecordsSync())
         let _ = (accountManager.accountRecords()
