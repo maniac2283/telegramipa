@@ -86,10 +86,6 @@ genrule(
 
     pushd "$$BUILD_DIR/libvpx"
     rm -rf .git
-    if ! grep -q 'arm64-iphonesimulator-gcc' configure; then
-        awk '{print} /arm64-darwin22-gcc/ && !done {print "all_platforms=\"$${all_platforms} arm64-iphonesimulator-gcc\""; done=1}' configure > configure.new
-        mv configure.new configure
-    fi
     popd
 
     mkdir -p "$$BUILD_DIR/Public/libvpx"
