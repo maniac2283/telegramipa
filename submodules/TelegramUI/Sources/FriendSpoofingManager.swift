@@ -8,7 +8,13 @@ import AccountContext
 final class FriendSpoofingManager {
     private let context: AccountContext
     private let disposable = DisposableSet()
-    private var lastTargetPeerId: PeerId?
+    private var lastTargetPeerIds: Set<PeerId> = []
+    
+    private struct ResolvedMapping {
+        let targetQuery: String
+        let sourceQuery: String
+        let state: FriendSpoofingOverlayState
+    }
     
     init(context: AccountContext) {
         self.context = context
@@ -21,149 +27,157 @@ final class FriendSpoofingManager {
             TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: ApplicationSpecificPreferencesKeys.friendSpoofingSettings)
         )
         |> map { entry -> FriendSpoofingSettings in
-            return entry?.get(FriendSpoofingSettings.self) ?? .defaultSettings
+            return FriendSpoofingSettings.fromPreference(entry)
         }
         |> distinctUntilChanged
         
         self.disposable.add((settings
-        |> mapToSignal { settings -> Signal<(PeerId, FriendSpoofingOverlayState?)?, NoError> in
-            let target = ProfileSpoofingManager.normalizedTarget(settings.target)
-            let source = ProfileSpoofingManager.normalizedTarget(settings.source)
-            if !settings.isEnabled || target.isEmpty || source.isEmpty {
-                if settings.targetPeerId != nil || settings.sourcePeerId != nil {
-                    let _ = updateFriendSpoofingSettings(engine: engine, { current in
-                        var next = current
-                        next.targetPeerId = nil
-                        next.sourcePeerId = nil
-                        return next
-                    }).start()
-                }
-                return .single(nil)
+        |> mapToSignal { settings -> Signal<(Bool, [ResolvedMapping]), NoError> in
+            let mappings = settings.activeMappings.filter { mapping in
+                !FriendSpoofingSettings.normalizedIdentifier(mapping.target).isEmpty && !FriendSpoofingSettings.normalizedIdentifier(mapping.source).isEmpty
             }
-            let restored = FriendSpoofingManager.restoredState(account: account, settings: settings)
-            let live = (settings.targetPeerId == nil || settings.sourcePeerId == nil ? (Signal<Void, NoError>.single(Void()) |> delay(0.4, queue: Queue.mainQueue())) : Signal<Void, NoError>.single(Void()))
+            if !settings.isEnabled || mappings.isEmpty {
+                return .single((false, []))
+            }
+            let restored = FriendSpoofingManager.restoredMappings(account: account, mappings: mappings)
+            let needsResolve = mappings.contains(where: { $0.targetPeerId == nil || $0.sourcePeerId == nil })
+            let live = (needsResolve ? (Signal<Void, NoError>.single(Void()) |> delay(0.4, queue: Queue.mainQueue())) : Signal<Void, NoError>.single(Void()))
             |> mapToSignal { _ in
-                return combineLatest(
-                    FriendSpoofingManager.resolvePeer(context: context, target: target),
-                    FriendSpoofingManager.resolvePeer(context: context, target: source)
-                )
+                return combineLatest(mappings.map { mapping in
+                    return FriendSpoofingManager.liveState(context: context, account: account, accountPeerId: accountPeerId, mapping: mapping)
+                })
             }
-            |> mapToSignal { targetPeer, sourcePeer -> Signal<(PeerId, FriendSpoofingOverlayState?)?, NoError> in
-                guard let targetPeer, case let .user(targetUser) = targetPeer, targetUser.id != accountPeerId, !MessageSimulationOverlay.isSimulatedPeer(targetUser.id) else {
-                    return .single(nil)
-                }
-                guard let sourcePeer, case let .user(sourceUser) = sourcePeer, sourceUser.id != targetUser.id, !MessageSimulationOverlay.isSimulatedPeer(sourceUser.id) else {
-                    return .single(nil)
-                }
-                let targetId = targetUser.id
-                return account.viewTracker.peerView(sourceUser.id, updateData: true)
-                |> map { view -> (PeerId, FriendSpoofingOverlayState?)? in
-                    let source = (view.peers[sourceUser.id] as? TelegramUser) ?? sourceUser
-                    let state = FriendSpoofingOverlayState(targetPeerId: targetId, sourcePeerId: source.id, sourceUser: source, sourceCachedData: view.cachedData as? CachedUserData)
-                    return (targetId, state)
-                }
+            |> map { items -> (Bool, [ResolvedMapping]) in
+                return (true, items.compactMap { $0 })
             }
             return restored
-            |> mapToSignal { cached -> Signal<(PeerId, FriendSpoofingOverlayState?)?, NoError> in
-                if let cached {
-                    return .single(cached) |> then(live)
+            |> mapToSignal { cached -> Signal<(Bool, [ResolvedMapping]), NoError> in
+                if cached.isEmpty {
+                    return live
                 }
-                return live
+                return .single((true, cached)) |> then(live)
             }
         }
         |> distinctUntilChanged(isEqual: { lhs, rhs in
-            switch (lhs, rhs) {
-            case (nil, nil):
-                return true
-            case let (lhs?, rhs?):
-                if lhs.0 != rhs.0 {
-                    return false
-                }
-                guard let lhsState = lhs.1, let rhsState = rhs.1 else {
-                    return lhs.1 == nil && rhs.1 == nil
-                }
-                if lhsState.sourcePeerId != rhsState.sourcePeerId {
-                    return false
-                }
-                if lhsState.sourceUser != rhsState.sourceUser {
-                    return false
-                }
-                if lhsState.sourceCachedData?.about != rhsState.sourceCachedData?.about {
-                    return false
-                }
-                if lhsState.sourceCachedData?.starGiftsCount != rhsState.sourceCachedData?.starGiftsCount {
-                    return false
-                }
-                if lhsState.sourceCachedData?.verification != rhsState.sourceCachedData?.verification {
-                    return false
-                }
-                if lhsState.sourceCachedData?.starRating != rhsState.sourceCachedData?.starRating {
-                    return false
-                }
-                if lhsState.sourceCachedData?.personalChannel != rhsState.sourceCachedData?.personalChannel {
-                    return false
-                }
-                return true
-            default:
+            if lhs.0 != rhs.0 || lhs.1.count != rhs.1.count {
                 return false
             }
-        })
-        |> mapToSignal { [weak self] value -> Signal<Never, NoError> in
-            let previousTargetId = self?.lastTargetPeerId
-            let targetId = value?.0
-            let state = value?.1
-            self?.lastTargetPeerId = targetId
-            if previousTargetId != targetId, let previousTargetId {
-                FriendSpoofingOverlay.set(nil, for: previousTargetId)
-            }
-            let restorePrevious: Signal<Never, NoError>
-            if previousTargetId != targetId, let previousTargetId {
-                restorePrevious = account.viewTracker.peerView(previousTargetId, updateData: true) |> take(1) |> ignoreValues
-            } else {
-                restorePrevious = .complete()
-            }
-            if let targetId, let state {
-                let existing = FriendSpoofingOverlay.current(for: targetId)
-                FriendSpoofingOverlay.set(state, for: targetId)
-                if existing?.sourcePeerId != state.sourcePeerId {
-                    let targetRaw = targetId.toInt64()
-                    let sourceRaw = state.sourcePeerId.toInt64()
-                    let _ = updateFriendSpoofingSettings(engine: engine, { current in
-                        var next = current
-                        if next.targetPeerId != targetRaw || next.sourcePeerId != sourceRaw {
-                            next.targetPeerId = targetRaw
-                            next.sourcePeerId = sourceRaw
-                        }
-                        return next
-                    }).start()
+            for (lhsItem, rhsItem) in zip(lhs.1, rhs.1) {
+                if lhsItem.targetQuery != rhsItem.targetQuery || lhsItem.sourceQuery != rhsItem.sourceQuery {
+                    return false
                 }
-                return restorePrevious
-            } else {
-                return restorePrevious
+                if !FriendSpoofingManager.statesEqual(lhsItem.state, rhsItem.state) {
+                    return false
+                }
             }
+            return true
+        })
+        |> mapToSignal { [weak self] enabled, resolved -> Signal<Never, NoError> in
+            var next: [PeerId: FriendSpoofingOverlayState] = [:]
+            for item in resolved {
+                next[item.state.targetPeerId] = item.state
+            }
+            let previousIds = self?.lastTargetPeerIds ?? []
+            let nextIds = Set(next.keys)
+            self?.lastTargetPeerIds = nextIds
+            FriendSpoofingOverlay.replaceAll(next, persist: enabled && !next.isEmpty)
+            for state in next.values {
+                account.viewTracker.forceUpdateCachedPeerData(peerId: state.sourcePeerId)
+            }
+            if enabled && !resolved.isEmpty {
+                let _ = updateFriendSpoofingSettings(engine: engine, { current in
+                    var nextSettings = current
+                    for item in resolved {
+                        nextSettings.upsertResolved(targetQuery: item.targetQuery, sourceQuery: item.sourceQuery, targetPeerId: item.state.targetPeerId.toInt64(), sourcePeerId: item.state.sourcePeerId.toInt64())
+                    }
+                    return nextSettings
+                }).start()
+            }
+            var restoreSignals: [Signal<Never, NoError>] = []
+            for peerId in previousIds.subtracting(nextIds) {
+                restoreSignals.append(account.viewTracker.peerView(peerId, updateData: true) |> take(1) |> ignoreValues)
+            }
+            if restoreSignals.isEmpty {
+                return .complete()
+            }
+            return combineLatest(restoreSignals) |> ignoreValues
         }).start())
     }
     
     deinit {
         self.disposable.dispose()
-        if let lastTargetPeerId = self.lastTargetPeerId {
-            FriendSpoofingOverlay.set(nil, for: lastTargetPeerId, persist: false)
+        FriendSpoofingOverlay.replaceAll([:], persist: false)
+    }
+    
+    private static func statesEqual(_ lhs: FriendSpoofingOverlayState, _ rhs: FriendSpoofingOverlayState) -> Bool {
+        if lhs.targetPeerId != rhs.targetPeerId {
+            return false
+        }
+        if lhs.sourcePeerId != rhs.sourcePeerId {
+            return false
+        }
+        if lhs.sourceUser != rhs.sourceUser {
+            return false
+        }
+        if lhs.sourceCachedData?.about != rhs.sourceCachedData?.about {
+            return false
+        }
+        if lhs.sourceCachedData?.starGiftsCount != rhs.sourceCachedData?.starGiftsCount {
+            return false
+        }
+        if lhs.sourceCachedData?.verification != rhs.sourceCachedData?.verification {
+            return false
+        }
+        if lhs.sourceCachedData?.starRating != rhs.sourceCachedData?.starRating {
+            return false
+        }
+        if lhs.sourceCachedData?.personalChannel != rhs.sourceCachedData?.personalChannel {
+            return false
+        }
+        return true
+    }
+    
+    private static func restoredMappings(account: Account, mappings: [FriendSpoofingMapping]) -> Signal<[ResolvedMapping], NoError> {
+        return account.postbox.transaction { transaction -> [ResolvedMapping] in
+            var next: [ResolvedMapping] = []
+            for mapping in mappings {
+                guard let targetRaw = mapping.targetPeerId, let sourceRaw = mapping.sourcePeerId else {
+                    continue
+                }
+                let targetId = PeerId(targetRaw)
+                let sourceId = PeerId(sourceRaw)
+                guard let source = transaction.getPeer(sourceId) as? TelegramUser else {
+                    continue
+                }
+                let cached = transaction.getPeerCachedData(peerId: sourceId) as? CachedUserData
+                let state = FriendSpoofingOverlayState(targetPeerId: targetId, sourcePeerId: sourceId, sourceUser: source, sourceCachedData: cached)
+                next.append(ResolvedMapping(targetQuery: mapping.target, sourceQuery: mapping.source, state: state))
+            }
+            return next
         }
     }
     
-    private static func restoredState(account: Account, settings: FriendSpoofingSettings) -> Signal<(PeerId, FriendSpoofingOverlayState?)?, NoError> {
-        guard let targetRaw = settings.targetPeerId, let sourceRaw = settings.sourcePeerId else {
-            return .single(nil)
-        }
-        let targetId = PeerId(targetRaw)
-        let sourceId = PeerId(sourceRaw)
-        return account.postbox.transaction { transaction -> (PeerId, FriendSpoofingOverlayState?)? in
-            guard let source = transaction.getPeer(sourceId) as? TelegramUser else {
-                return nil
+    private static func liveState(context: AccountContext, account: Account, accountPeerId: PeerId, mapping: FriendSpoofingMapping) -> Signal<ResolvedMapping?, NoError> {
+        let target = FriendSpoofingSettings.normalizedIdentifier(mapping.target)
+        let source = FriendSpoofingSettings.normalizedIdentifier(mapping.source)
+        return combineLatest(
+            FriendSpoofingManager.resolvePeer(context: context, target: target),
+            FriendSpoofingManager.resolvePeer(context: context, target: source)
+        )
+        |> mapToSignal { targetPeer, sourcePeer -> Signal<ResolvedMapping?, NoError> in
+            guard let targetPeer, case let .user(targetUser) = targetPeer, targetUser.id != accountPeerId, !MessageSimulationOverlay.isSimulatedPeer(targetUser.id) else {
+                return .single(nil)
             }
-            let cached = transaction.getPeerCachedData(peerId: sourceId) as? CachedUserData
-            let state = FriendSpoofingOverlayState(targetPeerId: targetId, sourcePeerId: sourceId, sourceUser: source, sourceCachedData: cached)
-            return (targetId, state)
+            guard let sourcePeer, case let .user(sourceUser) = sourcePeer, sourceUser.id != targetUser.id, !MessageSimulationOverlay.isSimulatedPeer(sourceUser.id) else {
+                return .single(nil)
+            }
+            let targetId = targetUser.id
+            return account.viewTracker.peerView(sourceUser.id, updateData: true)
+            |> map { view -> ResolvedMapping? in
+                let sourceUser = (view.peers[sourceUser.id] as? TelegramUser) ?? sourceUser
+                let state = FriendSpoofingOverlayState(targetPeerId: targetId, sourcePeerId: sourceUser.id, sourceUser: sourceUser, sourceCachedData: view.cachedData as? CachedUserData)
+                return ResolvedMapping(targetQuery: mapping.target, sourceQuery: mapping.source, state: state)
+            }
         }
     }
     

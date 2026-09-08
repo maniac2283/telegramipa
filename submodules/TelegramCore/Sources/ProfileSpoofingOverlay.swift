@@ -42,6 +42,7 @@ public enum ProfileSpoofingOverlay {
             } else {
                 UserDefaults.standard.removeObject(forKey: key)
             }
+            UserDefaults.standard.synchronize()
         }
     }
     

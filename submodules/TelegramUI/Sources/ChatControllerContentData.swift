@@ -537,9 +537,10 @@ extension ChatControllerImpl {
                     configuration,
                     hasPeerInfo,
                     messageOptionsTitleInfo,
-                    savedMessagesChatsTip
+                    savedMessagesChatsTip,
+                    PeerDisplayOverlay.updated
                 )
-                |> deliverOnMainQueue).startStrict(next: { [weak self] peerView, onlineMemberCount, displayedCount, subtitleText, configuration, hasPeerInfo, messageOptionsTitleInfo, savedMessagesChatsTip in
+                |> deliverOnMainQueue).startStrict(next: { [weak self] peerView, onlineMemberCount, displayedCount, subtitleText, configuration, hasPeerInfo, messageOptionsTitleInfo, savedMessagesChatsTip, _ in
                     guard let strongSelf = self else {
                         return
                     }
@@ -636,7 +637,7 @@ extension ChatControllerImpl {
                             }
                             
                             strongSelf.state.infoAvatar = .peer(
-                                peer: EnginePeer(peer),
+                                peer: EnginePeer(PeerDisplayOverlay.apply(peer: peer)),
                                 imageOverride: imageOverride,
                                 contextActionIsEnabled: infoContextActionIsEnabled,
                                 accessibilityLabel: strings.Conversation_ContextMenuOpenProfile

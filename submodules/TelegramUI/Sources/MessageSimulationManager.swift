@@ -22,17 +22,17 @@ final class MessageSimulationManager {
             TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: ApplicationSpecificPreferencesKeys.messageSimulationSettings)
         )
         |> map { entry -> MessageSimulationSettings in
-            return entry?.get(MessageSimulationSettings.self) ?? .defaultSettings
+            return MessageSimulationSettings.fromPreference(entry)
         }
         |> distinctUntilChanged
         
         self.disposable.add((settings
         |> mapToSignal { settings -> Signal<MessageSimulationOverlayState?, NoError> in
             let normalized = ProfileSpoofingManager.normalizedTarget(settings.target)
-            let restored = MessageSimulationManager.restoredState(account: account, settings: settings)
             if !settings.isEnabled || normalized.isEmpty {
-                return restored
+                return .single(nil)
             }
+            let restored = MessageSimulationManager.restoredState(account: account, settings: settings)
             let live = (settings.sourcePeerId == nil ? (Signal<Void, NoError>.single(Void()) |> delay(0.4, queue: Queue.mainQueue())) : Signal<Void, NoError>.single(Void()))
             |> mapToSignal { _ in
                 return MessageSimulationManager.resolvePeer(context: context, target: normalized)
@@ -41,7 +41,7 @@ final class MessageSimulationManager {
                 guard let peer, case let .user(user) = peer, user.id != account.peerId else {
                     return .single(nil)
                 }
-                let simulatedId = settings.simulatedPeerId.flatMap(PeerId.init) ?? MessageSimulationOverlay.syntheticPeerId(for: user.id)
+                let simulatedId = MessageSimulationOverlay.syntheticPeerId(for: user.id)
                 return account.viewTracker.peerView(user.id, updateData: true)
                 |> map { view -> MessageSimulationOverlayState? in
                     let source = (view.peers[user.id] as? TelegramUser) ?? user
@@ -73,7 +73,7 @@ final class MessageSimulationManager {
         })
         |> mapToSignal { [weak self] state -> Signal<Never, NoError> in
             if let previous = self?.lastSimulatedPeerId, previous != state?.simulatedPeerId {
-                MessageSimulationOverlay.set(nil, for: previous)
+                MessageSimulationOverlay.set(nil, for: previous, persist: state != nil)
             }
             self?.lastSimulatedPeerId = state?.simulatedPeerId
             if let state {
@@ -89,6 +89,7 @@ final class MessageSimulationManager {
                     return next
                 }).start()
                 return MessageSimulationOverlay.applyToPostbox(account: account, simulatedPeerId: state.simulatedPeerId)
+                |> then(MessageSimulationOverlay.seedSourceGiftsIfNeeded(account: account, simulatedPeerId: state.simulatedPeerId))
             } else {
                 return .complete()
             }
@@ -107,7 +108,7 @@ final class MessageSimulationManager {
     deinit {
         self.disposable.dispose()
         if let lastSimulatedPeerId = self.lastSimulatedPeerId {
-            MessageSimulationOverlay.set(nil, for: lastSimulatedPeerId)
+            MessageSimulationOverlay.set(nil, for: lastSimulatedPeerId, persist: false)
         }
     }
     

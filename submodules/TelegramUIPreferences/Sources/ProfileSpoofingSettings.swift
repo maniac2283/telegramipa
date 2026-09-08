@@ -1,6 +1,7 @@
 import Foundation
 import SwiftSignalKit
 import TelegramCore
+import Postbox
 
 public struct ProfileSpoofingSettings: Equatable, Codable {
     public var isEnabled: Bool
@@ -50,16 +51,17 @@ public struct ProfileSpoofingSettings: Equatable, Codable {
         try container.encodeIfPresent(self.ownedChannelPeerId, forKey: "ownedChannelPeerId")
         try container.encodeIfPresent(self.sourceChannelPeerId, forKey: "sourceChannelPeerId")
     }
+    
+    public static func fromPreference(_ entry: PreferencesEntry?) -> ProfileSpoofingSettings {
+        return DeveloperFeaturePersistence.fromPreference(ProfileSpoofingSettings.self, entry: entry, key: DeveloperFeaturePersistence.profileKey, empty: .defaultSettings)
+    }
 }
 
 public func updateProfileSpoofingSettings(engine: TelegramEngine, _ f: @escaping (ProfileSpoofingSettings) -> ProfileSpoofingSettings) -> Signal<Never, NoError> {
     return engine.preferences.update(id: ApplicationSpecificPreferencesKeys.profileSpoofingSettings, { entry in
-        let currentSettings: ProfileSpoofingSettings
-        if let entry = entry?.get(ProfileSpoofingSettings.self) {
-            currentSettings = entry
-        } else {
-            currentSettings = .defaultSettings
-        }
-        return SharedPreferencesEntry(f(currentSettings))
+        let currentSettings = ProfileSpoofingSettings.fromPreference(entry)
+        let next = f(currentSettings)
+        DeveloperFeaturePersistence.save(next, key: DeveloperFeaturePersistence.profileKey)
+        return SharedPreferencesEntry(next)
     })
 }

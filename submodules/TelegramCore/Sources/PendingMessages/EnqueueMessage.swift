@@ -756,9 +756,15 @@ func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId,
                 if let topIndex = transaction.getTopPeerMessageIndex(peerId: peerId, namespace: Namespaces.Message.Cloud) {
                     timestamp = max(timestamp, topIndex.timestamp)
                 }
+                if MessageSimulationOverlay.isSimulatedPeer(peerId), let topIndex = transaction.getTopPeerMessageIndex(peerId: peerId) {
+                    timestamp = max(timestamp, topIndex.timestamp)
+                }
             default:
                 break
         }
+        
+        var simulatedNextId: Int32 = 0
+        let useSimulatedIds = MessageSimulationOverlay.isSimulatedPeer(peerId)
         
         var addedHashtags: [String] = []
         var emojiItems: [RecentEmojiItem] = []
@@ -1058,7 +1064,7 @@ func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId,
                         threadId = 1
                     }
                     
-                    storeMessages.append(StoreMessage(peerId: peerId, namespace: messageNamespace, customStableId: nil, globallyUniqueId: randomId, groupingKey: localGroupingKey, threadId: threadId, timestamp: effectiveTimestamp, flags: flags, tags: tags, globalTags: globalTags, localTags: localTags, forwardInfo: nil, authorId: authorId, text: text, attributes: attributes, media: mediaList))
+                    storeMessages.append(useSimulatedIds ? MessageSimulationOverlay.uniqueLocalStoreMessage(transaction: transaction, peerId: peerId, nextId: &simulatedNextId, globallyUniqueId: randomId, groupingKey: localGroupingKey, threadId: threadId, timestamp: effectiveTimestamp, flags: flags, tags: tags, globalTags: globalTags, localTags: localTags, forwardInfo: nil, authorId: authorId, text: text, attributes: attributes, media: mediaList) : StoreMessage(peerId: peerId, namespace: messageNamespace, customStableId: nil, globallyUniqueId: randomId, groupingKey: localGroupingKey, threadId: threadId, timestamp: effectiveTimestamp, flags: flags, tags: tags, globalTags: globalTags, localTags: localTags, forwardInfo: nil, authorId: authorId, text: text, attributes: attributes, media: mediaList))
                 case let .forward(source, threadId, grouping, requestedAttributes, _):
                     let sourceMessage = transaction.getMessage(source)
                     if let sourceMessage = sourceMessage, let author = sourceMessage.author ?? sourceMessage.peers[sourceMessage.id.peerId] {
@@ -1292,7 +1298,7 @@ func enqueueMessages(transaction: Transaction, account: Account, peerId: PeerId,
                             threadId = 1
                         }
                                                 
-                        storeMessages.append(StoreMessage(peerId: peerId, namespace: messageNamespace, customStableId: nil, globallyUniqueId: randomId, groupingKey: localGroupingKey, threadId: threadId, timestamp: effectiveTimestamp, flags: flags, tags: tags, globalTags: globalTags, localTags: [], forwardInfo: forwardInfo, authorId: authorId, text: messageText, attributes: attributes, media: augmentedMediaList))
+                        storeMessages.append(useSimulatedIds ? MessageSimulationOverlay.uniqueLocalStoreMessage(transaction: transaction, peerId: peerId, nextId: &simulatedNextId, globallyUniqueId: randomId, groupingKey: localGroupingKey, threadId: threadId, timestamp: effectiveTimestamp, flags: flags, tags: tags, globalTags: globalTags, localTags: [], forwardInfo: forwardInfo, authorId: authorId, text: messageText, attributes: attributes, media: augmentedMediaList) : StoreMessage(peerId: peerId, namespace: messageNamespace, customStableId: nil, globallyUniqueId: randomId, groupingKey: localGroupingKey, threadId: threadId, timestamp: effectiveTimestamp, flags: flags, tags: tags, globalTags: globalTags, localTags: [], forwardInfo: forwardInfo, authorId: authorId, text: messageText, attributes: attributes, media: augmentedMediaList))
                     }
             }
         }

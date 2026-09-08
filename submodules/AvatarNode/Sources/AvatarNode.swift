@@ -17,6 +17,13 @@ import DirectMediaImageCache
 
 private let deletedIcon = UIImage(bundleImageName: "Avatar/DeletedIcon")?.precomposed()
 private let phoneIcon = generateTintedImage(image: UIImage(bundleImageName: "Avatar/PhoneIcon"), color: .white)
+
+private func overlayDisplayPeer(_ peer: EnginePeer?) -> EnginePeer? {
+    guard let peer else {
+        return nil
+    }
+    return EnginePeer(PeerDisplayOverlay.apply(peer: peer._asPeer()))
+}
 public let savedMessagesIcon = generateTintedImage(image: UIImage(bundleImageName: "Avatar/SavedMessagesIcon"), color: .white)
 public let repostStoryIcon = generateTintedImage(image: UIImage(bundleImageName: "Avatar/RepostStoryIcon"), color: .white)
 private let archivedChatsIcon = UIImage(bundleImageName: "Avatar/ArchiveAvatarIcon")?.precomposed()
@@ -587,6 +594,7 @@ public final class AvatarNode: ASDisplayNode {
             storeUnrounded: Bool = false,
             cutoutRect: CGRect? = nil
         ) {
+            let peer = overlayDisplayPeer(peer)
             var synchronousLoad = synchronousLoad
             var representation: TelegramMediaImageRepresentation?
             var icon = AvatarNodeIcon.none
@@ -715,6 +723,7 @@ public final class AvatarNode: ASDisplayNode {
             displayDimensions: CGSize = CGSize(width: 60.0, height: 60.0),
             storeUnrounded: Bool = false
         ) {
+            let peer = overlayDisplayPeer(peer)
             let smallProfileImage = peer?.smallProfileImage
             let params = Params(
                 peerId: peer?.id,
@@ -794,6 +803,7 @@ public final class AvatarNode: ASDisplayNode {
             storeUnrounded: Bool = false,
             cutoutRect: CGRect? = nil
         ) {
+            let peer = overlayDisplayPeer(peer)
             var synchronousLoad = synchronousLoad
             var representation: TelegramMediaImageRepresentation?
             var icon = AvatarNodeIcon.none

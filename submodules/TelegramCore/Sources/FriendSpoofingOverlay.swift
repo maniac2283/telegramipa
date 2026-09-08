@@ -32,6 +32,32 @@ public enum FriendSpoofingOverlay {
         return self.current(for: peerId)?.sourcePeerId
     }
     
+    public static func allTargetPeerIds() -> Set<PeerId> {
+        self.lock.lock()
+        defer {
+            self.lock.unlock()
+        }
+        return Set(self.states.keys)
+    }
+    
+    public static func replaceAll(_ next: [PeerId: FriendSpoofingOverlayState], persist: Bool = true) {
+        self.lock.lock()
+        let previousIds = Set(self.states.keys)
+        self.states = next
+        self.lock.unlock()
+        PeerDisplayOverlay.notifyUpdated()
+        if persist {
+            let nextIds = Set(next.keys)
+            for targetPeerId in previousIds.subtracting(nextIds) {
+                UserDefaults.standard.removeObject(forKey: Self.defaultsKey(for: targetPeerId))
+            }
+            for (targetPeerId, state) in next {
+                UserDefaults.standard.set(state.sourcePeerId.toInt64(), forKey: Self.defaultsKey(for: targetPeerId))
+            }
+            UserDefaults.standard.synchronize()
+        }
+    }
+    
     public static func set(_ state: FriendSpoofingOverlayState?, for targetPeerId: PeerId, persist: Bool = true) {
         self.lock.lock()
         if let state {
@@ -48,6 +74,7 @@ public enum FriendSpoofingOverlay {
             } else {
                 UserDefaults.standard.removeObject(forKey: key)
             }
+            UserDefaults.standard.synchronize()
         }
     }
     

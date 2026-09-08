@@ -507,7 +507,7 @@ public final class AccountContextImpl: AccountContext {
         })
         
         if sharedContext.applicationBindings.isMainApp && !temp {
-            Queue.mainQueue().after(0.5, { [weak self] in
+            Queue.mainQueue().after(0.05, { [weak self] in
                 guard let self else {
                     return
                 }

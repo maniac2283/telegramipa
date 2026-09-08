@@ -44,6 +44,7 @@ public enum ChannelSpoofingOverlay {
             } else {
                 UserDefaults.standard.removeObject(forKey: key)
             }
+            UserDefaults.standard.synchronize()
         }
     }
     

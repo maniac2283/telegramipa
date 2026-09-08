@@ -22,7 +22,7 @@ final class ProfileSpoofingManager {
             TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: ApplicationSpecificPreferencesKeys.profileSpoofingSettings)
         )
         |> map { entry -> ProfileSpoofingSettings in
-            return entry?.get(ProfileSpoofingSettings.self) ?? .defaultSettings
+            return ProfileSpoofingSettings.fromPreference(entry)
         }
         |> distinctUntilChanged
         
@@ -30,13 +30,6 @@ final class ProfileSpoofingManager {
         |> mapToSignal { settings -> Signal<ProfileSpoofingOverlayState?, NoError> in
             let normalized = ProfileSpoofingManager.normalizedTarget(settings.target)
             if !settings.isEnabled || normalized.isEmpty {
-                if settings.targetPeerId != nil {
-                    let _ = updateProfileSpoofingSettings(engine: engine, { current in
-                        var next = current
-                        next.targetPeerId = nil
-                        return next
-                    }).start()
-                }
                 return .single(nil)
             }
             let restored = ProfileSpoofingManager.restoredProfileState(account: account, settings: settings)
@@ -104,7 +97,7 @@ final class ProfileSpoofingManager {
         })
         |> mapToSignal { state -> Signal<Never, NoError> in
             let previous = ProfileSpoofingOverlay.current(for: accountPeerId)
-            ProfileSpoofingOverlay.set(state, for: accountPeerId)
+            ProfileSpoofingOverlay.set(state, for: accountPeerId, persist: state != nil)
             if let state, previous?.targetPeerId != state.targetPeerId {
                 let storedId = state.targetPeerId.toInt64()
                 let _ = updateProfileSpoofingSettings(engine: engine, { current in
@@ -130,14 +123,6 @@ final class ProfileSpoofingManager {
             let spoofAs = ProfileSpoofingManager.normalizedTarget(settings.spoofChannelAs)
             if !settings.channelSpoofingEnabled || myChannel.isEmpty || spoofAs.isEmpty {
                 self?.sourceHistoryDisposable.set(nil)
-                if settings.ownedChannelPeerId != nil || settings.sourceChannelPeerId != nil {
-                    let _ = updateProfileSpoofingSettings(engine: engine, { current in
-                        var next = current
-                        next.ownedChannelPeerId = nil
-                        next.sourceChannelPeerId = nil
-                        return next
-                    }).start()
-                }
                 return .single(nil)
             }
             if let ownedRaw = settings.ownedChannelPeerId, let sourceRaw = settings.sourceChannelPeerId {
@@ -213,7 +198,7 @@ final class ProfileSpoofingManager {
             let ownedId = value?.0
             let state = value?.1
             if previousOwnedId != ownedId, let previousOwnedId {
-                ChannelSpoofingOverlay.set(nil, for: previousOwnedId)
+                ChannelSpoofingOverlay.set(nil, for: previousOwnedId, persist: ownedId != nil)
             }
             self?.lastOwnedChannelId = ownedId
             if let ownedId, let state {
@@ -235,7 +220,7 @@ final class ProfileSpoofingManager {
                 return .complete()
             } else if let previousOwnedId {
                 self?.sourceHistoryDisposable.set(nil)
-                ChannelSpoofingOverlay.set(nil, for: previousOwnedId)
+                ChannelSpoofingOverlay.set(nil, for: previousOwnedId, persist: false)
                 return account.viewTracker.peerView(previousOwnedId, updateData: true) |> take(1) |> ignoreValues
             } else {
                 self?.sourceHistoryDisposable.set(nil)

@@ -1610,8 +1610,10 @@ func peerInfoScreenData(
                 var availablePanes = availablePanes
                 if isMyProfile {
                     availablePanes?.insert(.stories, at: 0)
-                    if availablePanes != nil, profileGiftsContext != nil, let cachedData = peerView.cachedData as? CachedUserData {
-                        if let starGiftsCount = cachedData.starGiftsCount, starGiftsCount > 0 {
+                    if availablePanes != nil, profileGiftsContext != nil {
+                        let overlayCached = PeerDisplayOverlay.applyCached(peerId: peerView.peerId, data: peerView.cachedData) as? CachedUserData
+                        let giftCount = overlayCached?.starGiftsCount ?? (peerView.cachedData as? CachedUserData)?.starGiftsCount
+                        if (giftCount ?? 0) > 0 || PeerDisplayOverlay.mediaSourcePeerId(for: peerView.peerId) != peerView.peerId {
                             availablePanes?.insert(.gifts, at: 1)
                         }
                     }
@@ -1623,8 +1625,10 @@ func peerInfoScreenData(
                         availablePanes?.insert(.stories, at: 0)
                     }
                     
-                    if availablePanes != nil, profileGiftsContext != nil, let cachedData = peerView.cachedData as? CachedUserData, peerView.peerId != context.account.peerId {
-                        if let starGiftsCount = cachedData.starGiftsCount, starGiftsCount > 0 {
+                    if availablePanes != nil, profileGiftsContext != nil, peerView.peerId != context.account.peerId {
+                        let overlayCached = PeerDisplayOverlay.applyCached(peerId: peerView.peerId, data: peerView.cachedData) as? CachedUserData
+                        let giftCount = overlayCached?.starGiftsCount ?? (peerView.cachedData as? CachedUserData)?.starGiftsCount
+                        if (giftCount ?? 0) > 0 || PeerDisplayOverlay.mediaSourcePeerId(for: peerView.peerId) != peerView.peerId {
                             availablePanes?.insert(.gifts, at: hasStories ? 1 : 0)
                         }
                     }

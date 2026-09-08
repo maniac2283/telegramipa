@@ -19,14 +19,17 @@ private final class DeveloperSettingsControllerArguments {
     let toggleFriendSpoofing: (Bool) -> Void
     let updateFriendTarget: (String) -> Void
     let updateFriendSource: (String) -> Void
+    let addFriendSpoofing: () -> Void
+    let removeFriendSpoofing: (Int) -> Void
     let toggleMessageSimulation: (Bool) -> Void
     let updateMessageSimulationTarget: (String) -> Void
     let updateMessageSimulationText: (String) -> Void
     let sendSimulatedText: () -> Void
     let sendSimulatedPicture: () -> Void
+    let sendSimulatedGift: () -> Void
     let openSimulatedConversation: () -> Void
     
-    init(toggleSpoofing: @escaping (Bool) -> Void, updateTarget: @escaping (String) -> Void, toggleChannelSpoofing: @escaping (Bool) -> Void, updateMyChannel: @escaping (String) -> Void, updateSpoofChannelAs: @escaping (String) -> Void, toggleFriendSpoofing: @escaping (Bool) -> Void, updateFriendTarget: @escaping (String) -> Void, updateFriendSource: @escaping (String) -> Void, toggleMessageSimulation: @escaping (Bool) -> Void, updateMessageSimulationTarget: @escaping (String) -> Void, updateMessageSimulationText: @escaping (String) -> Void, sendSimulatedText: @escaping () -> Void, sendSimulatedPicture: @escaping () -> Void, openSimulatedConversation: @escaping () -> Void) {
+    init(toggleSpoofing: @escaping (Bool) -> Void, updateTarget: @escaping (String) -> Void, toggleChannelSpoofing: @escaping (Bool) -> Void, updateMyChannel: @escaping (String) -> Void, updateSpoofChannelAs: @escaping (String) -> Void, toggleFriendSpoofing: @escaping (Bool) -> Void, updateFriendTarget: @escaping (String) -> Void, updateFriendSource: @escaping (String) -> Void, addFriendSpoofing: @escaping () -> Void, removeFriendSpoofing: @escaping (Int) -> Void, toggleMessageSimulation: @escaping (Bool) -> Void, updateMessageSimulationTarget: @escaping (String) -> Void, updateMessageSimulationText: @escaping (String) -> Void, sendSimulatedText: @escaping () -> Void, sendSimulatedPicture: @escaping () -> Void, sendSimulatedGift: @escaping () -> Void, openSimulatedConversation: @escaping () -> Void) {
         self.toggleSpoofing = toggleSpoofing
         self.updateTarget = updateTarget
         self.toggleChannelSpoofing = toggleChannelSpoofing
@@ -35,11 +38,14 @@ private final class DeveloperSettingsControllerArguments {
         self.toggleFriendSpoofing = toggleFriendSpoofing
         self.updateFriendTarget = updateFriendTarget
         self.updateFriendSource = updateFriendSource
+        self.addFriendSpoofing = addFriendSpoofing
+        self.removeFriendSpoofing = removeFriendSpoofing
         self.toggleMessageSimulation = toggleMessageSimulation
         self.updateMessageSimulationTarget = updateMessageSimulationTarget
         self.updateMessageSimulationText = updateMessageSimulationText
         self.sendSimulatedText = sendSimulatedText
         self.sendSimulatedPicture = sendSimulatedPicture
+        self.sendSimulatedGift = sendSimulatedGift
         self.openSimulatedConversation = openSimulatedConversation
     }
 }
@@ -65,6 +71,8 @@ private enum DeveloperSettingsEntry: ItemListNodeEntry {
     case friendSpoofingEnabled(String, Bool)
     case friendSpoofingTarget(String, String)
     case friendSpoofingSource(String, String)
+    case friendSpoofingAdd(String)
+    case friendSpoofingMapping(Int, String)
     case friendSpoofingInfo(String)
     case messageSimulationHeader(String)
     case messageSimulationEnabled(String, Bool)
@@ -72,6 +80,7 @@ private enum DeveloperSettingsEntry: ItemListNodeEntry {
     case messageSimulationText(String, String)
     case messageSimulationSendText(String)
     case messageSimulationSendPicture(String)
+    case messageSimulationSendGift(String)
     case messageSimulationOpen(String)
     case messageSimulationInfo(String)
     
@@ -81,9 +90,9 @@ private enum DeveloperSettingsEntry: ItemListNodeEntry {
             return DeveloperSettingsSection.spoofing.rawValue
         case .channelSpoofingHeader, .channelSpoofingEnabled, .channelSpoofingMyChannel, .channelSpoofingAs, .channelSpoofingInfo:
             return DeveloperSettingsSection.channelSpoofing.rawValue
-        case .friendSpoofingHeader, .friendSpoofingEnabled, .friendSpoofingTarget, .friendSpoofingSource, .friendSpoofingInfo:
+        case .friendSpoofingHeader, .friendSpoofingEnabled, .friendSpoofingTarget, .friendSpoofingSource, .friendSpoofingAdd, .friendSpoofingMapping, .friendSpoofingInfo:
             return DeveloperSettingsSection.friendSpoofing.rawValue
-        case .messageSimulationHeader, .messageSimulationEnabled, .messageSimulationTarget, .messageSimulationText, .messageSimulationSendText, .messageSimulationSendPicture, .messageSimulationOpen, .messageSimulationInfo:
+        case .messageSimulationHeader, .messageSimulationEnabled, .messageSimulationTarget, .messageSimulationText, .messageSimulationSendText, .messageSimulationSendPicture, .messageSimulationSendGift, .messageSimulationOpen, .messageSimulationInfo:
             return DeveloperSettingsSection.messageSimulation.rawValue
         }
     }
@@ -116,24 +125,30 @@ private enum DeveloperSettingsEntry: ItemListNodeEntry {
             return 11
         case .friendSpoofingSource:
             return 12
-        case .friendSpoofingInfo:
+        case .friendSpoofingAdd:
             return 13
+        case let .friendSpoofingMapping(index, _):
+            return 100 + Int32(index)
+        case .friendSpoofingInfo:
+            return 180
         case .messageSimulationHeader:
-            return 14
+            return 200
         case .messageSimulationEnabled:
-            return 15
+            return 201
         case .messageSimulationTarget:
-            return 16
+            return 202
         case .messageSimulationText:
-            return 17
+            return 203
         case .messageSimulationSendText:
-            return 18
+            return 204
         case .messageSimulationSendPicture:
-            return 19
+            return 205
+        case .messageSimulationSendGift:
+            return 206
         case .messageSimulationOpen:
-            return 20
+            return 207
         case .messageSimulationInfo:
-            return 21
+            return 208
         }
     }
     
@@ -165,6 +180,10 @@ private enum DeveloperSettingsEntry: ItemListNodeEntry {
             if case let .friendSpoofingTarget(rhsText, rhsValue) = rhs, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .friendSpoofingSource(lhsText, lhsValue):
             if case let .friendSpoofingSource(rhsText, rhsValue) = rhs, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
+        case let .friendSpoofingAdd(lhsText):
+            if case let .friendSpoofingAdd(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
+        case let .friendSpoofingMapping(lhsIndex, lhsText):
+            if case let .friendSpoofingMapping(rhsIndex, rhsText) = rhs, lhsIndex == rhsIndex, lhsText == rhsText { return true } else { return false }
         case let .friendSpoofingInfo(lhsText):
             if case let .friendSpoofingInfo(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
         case let .messageSimulationHeader(lhsText):
@@ -179,6 +198,8 @@ private enum DeveloperSettingsEntry: ItemListNodeEntry {
             if case let .messageSimulationSendText(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
         case let .messageSimulationSendPicture(lhsText):
             if case let .messageSimulationSendPicture(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
+        case let .messageSimulationSendGift(lhsText):
+            if case let .messageSimulationSendGift(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
         case let .messageSimulationOpen(lhsText):
             if case let .messageSimulationOpen(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
         case let .messageSimulationInfo(lhsText):
@@ -229,6 +250,14 @@ private enum DeveloperSettingsEntry: ItemListNodeEntry {
             return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(string: ""), text: value, placeholder: placeholder, type: .regular(capitalization: false, autocorrection: false), spacing: 0.0, clearType: .always, sectionId: self.section, textUpdated: { updatedText in
                 arguments.updateFriendSource(updatedText)
             }, action: {})
+        case let .friendSpoofingAdd(text):
+            return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: text, kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                arguments.addFriendSpoofing()
+            })
+        case let .friendSpoofingMapping(index, text):
+            return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: text, kind: .destructive, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                arguments.removeFriendSpoofing(index)
+            })
         case let .messageSimulationEnabled(text, value):
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: text, value: value, sectionId: self.section, style: .blocks, updated: { updatedValue in
                 arguments.toggleMessageSimulation(updatedValue)
@@ -248,6 +277,10 @@ private enum DeveloperSettingsEntry: ItemListNodeEntry {
         case let .messageSimulationSendPicture(text):
             return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: text, kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 arguments.sendSimulatedPicture()
+            })
+        case let .messageSimulationSendGift(text):
+            return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: text, kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                arguments.sendSimulatedGift()
             })
         case let .messageSimulationOpen(text):
             return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: text, kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
@@ -274,7 +307,13 @@ private func developerSettingsControllerEntries(settings: ProfileSpoofingSetting
     entries.append(.friendSpoofingEnabled("Enabled", friendSettings.isEnabled))
     entries.append(.friendSpoofingTarget("Target user ID or username", friendSettings.target))
     entries.append(.friendSpoofingSource("Source profile ID or username", friendSettings.source))
-    entries.append(.friendSpoofingInfo("When enabled, this client locally displays the source user's visible profile on the target user, including name, username, photo, bio, personal channel, Premium, verification, rating, gifts and other visible profile details. Real Telegram accounts and servers are not changed."))
+    entries.append(.friendSpoofingAdd("Add spoofed person"))
+    for (index, mapping) in friendSettings.mappings.enumerated() {
+        let target = FriendSpoofingSettings.normalizedIdentifier(mapping.target)
+        let source = FriendSpoofingSettings.normalizedIdentifier(mapping.source)
+        entries.append(.friendSpoofingMapping(index, "Remove \(target) → \(source)"))
+    }
+    entries.append(.friendSpoofingInfo("Each spoof is stored independently by user ID or username and applies only to that conversation and profile, including photo, gifts, badges, bio, username and other visible details. Add as many people as you want. Settings stay on this device after you close the app. Real Telegram accounts and servers are not changed."))
     
     entries.append(.messageSimulationHeader("Message Simulation"))
     entries.append(.messageSimulationEnabled("Enabled", simulation.isEnabled))
@@ -282,8 +321,9 @@ private func developerSettingsControllerEntries(settings: ProfileSpoofingSetting
     entries.append(.messageSimulationText("Message text", simulation.composeText))
     entries.append(.messageSimulationSendText("Send simulated message"))
     entries.append(.messageSimulationSendPicture("Send simulated picture"))
+    entries.append(.messageSimulationSendGift("Send simulated gift"))
     entries.append(.messageSimulationOpen("Open conversation"))
-    entries.append(.messageSimulationInfo("Creates a local-only chat that looks like a normal Telegram conversation with the specified profile, including photo, bio, Premium, verification, rating, gifts and other visible details. Incoming text, emoji and pictures are simulated on this device. You can reply in the chat; the simulated user receives, reads and replies locally. Messages persist until you delete them. No real Telegram accounts, messages or servers are changed."))
+    entries.append(.messageSimulationInfo("Creates a local-only chat that looks like a normal Telegram conversation with the specified profile, including photo, bio, Premium, verification, rating, gifts and other visible details. Incoming text, emoji, pictures and gifts are simulated on this device. You can reply in the chat; the simulated user receives, reads and replies locally. Gift bubbles use the same chat gift UI as Telegram. Messages persist until you delete them. No real Telegram accounts, messages or servers are changed."))
     return entries
 }
 
@@ -307,21 +347,21 @@ public func developerSettingsController(context: AccountContext) -> ViewControll
         TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: ApplicationSpecificPreferencesKeys.profileSpoofingSettings)
     )
     |> map { entry -> ProfileSpoofingSettings in
-        return entry?.get(ProfileSpoofingSettings.self) ?? .defaultSettings
+        return ProfileSpoofingSettings.fromPreference(entry)
     }
     
     let simulation = context.engine.data.subscribe(
         TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: ApplicationSpecificPreferencesKeys.messageSimulationSettings)
     )
     |> map { entry -> MessageSimulationSettings in
-        return entry?.get(MessageSimulationSettings.self) ?? .defaultSettings
+        return MessageSimulationSettings.fromPreference(entry)
     }
     
     let friendSettings = context.engine.data.subscribe(
         TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: ApplicationSpecificPreferencesKeys.friendSpoofingSettings)
     )
     |> map { entry -> FriendSpoofingSettings in
-        return entry?.get(FriendSpoofingSettings.self) ?? .defaultSettings
+        return FriendSpoofingSettings.fromPreference(entry)
     }
     
     var presentControllerImpl: ((ViewController, Any?) -> Void)?
@@ -373,6 +413,18 @@ public func developerSettingsController(context: AccountContext) -> ViewControll
         updateDisposable.set(updateFriendSpoofingSettings(engine: context.engine, { current in
             var current = current
             current.source = text
+            return current
+        }).start())
+    }, addFriendSpoofing: {
+        updateDisposable.set(updateFriendSpoofingSettings(engine: context.engine, { current in
+            var current = current
+            current.upsertDraftMapping()
+            return current
+        }).start())
+    }, removeFriendSpoofing: { index in
+        updateDisposable.set(updateFriendSpoofingSettings(engine: context.engine, { current in
+            var current = current
+            current.removeMapping(at: index)
             return current
         }).start())
     }, toggleMessageSimulation: { value in
@@ -431,6 +483,15 @@ public func developerSettingsController(context: AccountContext) -> ViewControll
         if let mainController {
             presentControllerImpl?(mainController, nil)
         }
+    }, sendSimulatedGift: {
+        actionDisposable.set((simulation |> take(1) |> mapToSignal { settings -> Signal<Never, NoError> in
+            guard settings.isEnabled, let raw = settings.simulatedPeerId else {
+                return .complete()
+            }
+            let text = settings.composeText.trimmingCharacters(in: .whitespacesAndNewlines)
+            return MessageSimulationOverlay.insertIncomingGift(account: context.account, peerId: PeerId(raw), text: text.isEmpty ? nil : text, notify: true)
+            |> ignoreValues
+        }).start())
     }, openSimulatedConversation: {
         actionDisposable.set((simulation |> take(1) |> mapToSignal { settings -> Signal<EnginePeer?, NoError> in
             guard settings.isEnabled, let raw = settings.simulatedPeerId else {

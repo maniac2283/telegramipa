@@ -1,6 +1,7 @@
 import Foundation
 import SwiftSignalKit
 import TelegramCore
+import Postbox
 
 public struct MessageSimulationSettings: Equatable, Codable {
     public var isEnabled: Bool
@@ -38,16 +39,17 @@ public struct MessageSimulationSettings: Equatable, Codable {
         try container.encodeIfPresent(self.sourcePeerId, forKey: "sourcePeerId")
         try container.encodeIfPresent(self.simulatedPeerId, forKey: "simulatedPeerId")
     }
+    
+    public static func fromPreference(_ entry: PreferencesEntry?) -> MessageSimulationSettings {
+        return DeveloperFeaturePersistence.fromPreference(MessageSimulationSettings.self, entry: entry, key: DeveloperFeaturePersistence.simulationKey, empty: .defaultSettings)
+    }
 }
 
 public func updateMessageSimulationSettings(engine: TelegramEngine, _ f: @escaping (MessageSimulationSettings) -> MessageSimulationSettings) -> Signal<Never, NoError> {
     return engine.preferences.update(id: ApplicationSpecificPreferencesKeys.messageSimulationSettings, { entry in
-        let currentSettings: MessageSimulationSettings
-        if let entry = entry?.get(MessageSimulationSettings.self) {
-            currentSettings = entry
-        } else {
-            currentSettings = .defaultSettings
-        }
-        return SharedPreferencesEntry(f(currentSettings))
+        let currentSettings = MessageSimulationSettings.fromPreference(entry)
+        let next = f(currentSettings)
+        DeveloperFeaturePersistence.save(next, key: DeveloperFeaturePersistence.simulationKey)
+        return SharedPreferencesEntry(next)
     })
 }

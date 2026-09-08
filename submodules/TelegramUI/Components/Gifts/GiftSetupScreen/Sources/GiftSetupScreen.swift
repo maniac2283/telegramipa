@@ -493,6 +493,55 @@ private final class GiftSetupScreenComponent: Component {
             }
 
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+
+            if MessageSimulationOverlay.isSimulatedPeer(peerId), case let .starGift(starGift, _) = component.subject {
+                self.inProgress = true
+                self.state?.updated()
+                let caption = textInputText.string.trimmingCharacters(in: .whitespacesAndNewlines)
+                let giftText = caption.isEmpty ? nil : caption
+                let _ = (MessageSimulationOverlay.insertGiftMessage(
+                    account: context.account,
+                    peerId: peerId,
+                    gift: .generic(starGift),
+                    text: giftText,
+                    entities: giftText == nil ? nil : entities,
+                    incoming: false,
+                    nameHidden: self.hideName,
+                    includeUpgrade: self.includeUpgrade,
+                    notify: false
+                )
+                |> deliverOnMainQueue).start(next: { [weak self] message in
+                    guard let self, let controller = self.environment?.controller(), let navigationController = controller.navigationController as? NavigationController else {
+                        return
+                    }
+                    if message == nil {
+                        self.inProgress = false
+                        self.state?.updated()
+                        return
+                    }
+                    var controllers = navigationController.viewControllers
+                    controllers = controllers.filter { !($0 is GiftSetupScreen) && !($0 is GiftOptionsScreenProtocol) && !($0 is PeerInfoScreen) && !($0 is ContactSelectionController) }
+                    var foundController = false
+                    for controller in controllers.reversed() {
+                        if let chatController = controller as? ChatController, case .peer(id: peerId) = chatController.chatLocation {
+                            chatController.hintPlayNextOutgoingGift()
+                            foundController = true
+                            break
+                        }
+                    }
+                    if !foundController {
+                        let chatController = context.sharedContext.makeChatController(context: context, chatLocation: .peer(id: peerId), subject: nil, botStart: nil, mode: .standard(.default), params: nil)
+                        chatController.hintPlayNextOutgoingGift()
+                        controllers.append(chatController)
+                    }
+                    navigationController.setViewControllers(controllers, animated: true)
+                    if let completion = component.completion {
+                        completion()
+                        controller.dismiss()
+                    }
+                })
+                return
+            }
                     
             var finalPrice: Int64
             var perUserLimit: Int32?

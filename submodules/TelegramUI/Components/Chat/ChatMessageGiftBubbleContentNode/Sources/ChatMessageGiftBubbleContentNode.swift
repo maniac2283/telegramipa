@@ -1044,7 +1044,13 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 if let file = animationFile {
                                     strongSelf.animationNode.setup(source: AnimatedStickerResourceSource(account: item.context.account, resource: file.resource, isVideo: file.mimeType == "video/webm"), width: 384, height: 384, playbackMode: .once, mode: .direct(cachePathPrefix: nil))
                                     if strongSelf.fetchDisposable == nil {
-                                        strongSelf.fetchDisposable = freeMediaFileResourceInteractiveFetched(postbox: item.context.account.postbox, userLocation: .other, fileReference: .message(message: MessageReference(item.message), media: file), resource: file.resource).start()
+                                        let fileReference: FileMediaReference
+                                        if MessageSimulationOverlay.isSimulatedPeer(item.message.id.peerId) {
+                                            fileReference = .standalone(media: file)
+                                        } else {
+                                            fileReference = .message(message: MessageReference(item.message), media: file)
+                                        }
+                                        strongSelf.fetchDisposable = freeMediaFileResourceInteractiveFetched(postbox: item.context.account.postbox, userLocation: .other, fileReference: fileReference, resource: file.resource).start()
                                     }
                                     
                                     if let immediateThumbnailData = file.immediateThumbnailData {
