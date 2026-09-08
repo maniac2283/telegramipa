@@ -20,9 +20,14 @@ libs = [
 
 filegroup(
     name = "libvpx_sources",
-    srcs = glob([
-        "libvpx/**/*"
-    ]),
+    srcs = glob(
+        [
+            "libvpx/**/*",
+        ],
+        exclude = [
+            "libvpx/.git",
+        ],
+    ),
 )
 
 
@@ -80,6 +85,7 @@ genrule(
     cp -R "$$SOURCE_PATH" "$$BUILD_DIR/"
 
     pushd "$$BUILD_DIR/libvpx"
+    rm -rf .git
     git apply --whitespace=nowarn ../0001-Support-arm64-simulator.patch
     popd
 

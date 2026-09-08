@@ -137,6 +137,7 @@ jobs:
           sudo mkdir -p /Users/Shared
           rsync -a --delete \
             --exclude '.git/' \
+            --exclude '.git' \
             --exclude 'bazel-bin/' \
             --exclude 'bazel-out/' \
             --exclude 'bazel-testlogs/' \
