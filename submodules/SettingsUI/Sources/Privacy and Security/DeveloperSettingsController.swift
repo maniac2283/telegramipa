@@ -426,6 +426,7 @@ public func developerSettingsController(context: AccountContext) -> ViewControll
             pickerHolder = nil
         })
         pickerHolder = holder
+        _ = pickerHolder
         pickerController = mainController
         if let mainController {
             presentControllerImpl?(mainController, nil)
