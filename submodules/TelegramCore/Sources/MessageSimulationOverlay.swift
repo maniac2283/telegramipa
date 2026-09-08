@@ -186,6 +186,9 @@ public enum MessageSimulationOverlay {
             return nil
         }
         |> mapToSignal { message -> Signal<Message?, NoError> in
+            if let message {
+                self.prefetchGiftFiles(account: account, message: message)
+            }
             if notify, let message {
                 account.stateManager.notifyIncomingMessages([message], notify: true)
             }
@@ -215,28 +218,6 @@ public enum MessageSimulationOverlay {
             }
         }
         |> ignoreValues
-    }
-    
-    public static func simulatedReplyText(to text: String, hasMedia: Bool) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if hasMedia && trimmed.isEmpty {
-            return ["Looks good 👍", "Nice shot", "Got the picture"].randomElement() ?? "Looks good 👍"
-        }
-        if trimmed.contains("?") {
-            return ["Yeah, that works", "I think so", "Sure 👍"].randomElement() ?? "Yeah"
-        }
-        if trimmed.count <= 2 {
-            return ["👍", "Okay", "Yep"].randomElement() ?? "Okay"
-        }
-        let replies = [
-            "Okay, sounds good",
-            "Got it",
-            "Makes sense",
-            "Alright 👍",
-            "I'll take a look",
-            "Thanks for the update"
-        ]
-        return replies.randomElement() ?? "Got it"
     }
     
     public static func insertIncomingGift(account: Account, peerId: PeerId, text: String?, notify: Bool) -> Signal<Message?, NoError> {
@@ -314,68 +295,6 @@ public enum MessageSimulationOverlay {
             toPeerId: toPeerId
         )
         return self.insertLocalMessage(account: account, peerId: peerId, text: "", media: [media], incoming: incoming, notify: notify)
-    }
-    
-    public static func seedSourceGiftsIfNeeded(account: Account, simulatedPeerId: PeerId) -> Signal<Never, NoError> {
-        guard self.isSimulatedPeer(simulatedPeerId), let state = self.current(for: simulatedPeerId) else {
-            return .complete()
-        }
-        let key = self.giftsSeededKey(for: simulatedPeerId)
-        if UserDefaults.standard.bool(forKey: key) {
-            return .complete()
-        }
-        return self.profileSavedGifts(account: account, peerId: state.sourcePeerId)
-        |> mapToSignal { savedGifts -> Signal<[ProfileGiftsContext.State.StarGift], NoError> in
-            if !savedGifts.isEmpty {
-                return .single(Array(savedGifts.prefix(3)))
-            }
-            return self.catalogGifts(account: account)
-            |> map { gifts in
-                return gifts.prefix(3).map { gift in
-                    return self.savedGift(from: gift)
-                }
-            }
-        }
-        |> mapToSignal { selected -> Signal<Never, NoError> in
-            guard !selected.isEmpty else {
-                UserDefaults.standard.set(true, forKey: key)
-                return .complete()
-            }
-            var signal: Signal<Never, NoError> = .complete()
-            for saved in selected {
-                let media = self.media(
-                    for: saved.gift,
-                    text: saved.text,
-                    entities: saved.entities,
-                    nameHidden: saved.nameHidden,
-                    savedToProfile: saved.savedToProfile,
-                    convertStars: saved.convertStars,
-                    canUpgrade: saved.canUpgrade,
-                    upgradeStars: saved.upgradeStars,
-                    includeUpgrade: saved.upgradeStars != nil,
-                    isRefunded: saved.isRefunded,
-                    canExportDate: saved.canExportDate,
-                    transferStars: saved.transferStars,
-                    canTransferDate: saved.canTransferDate,
-                    canResaleDate: saved.canResaleDate,
-                    dropOriginalDetailsStars: saved.dropOriginalDetailsStars,
-                    number: saved.number,
-                    canCraftAt: saved.canCraftAt,
-                    senderId: simulatedPeerId,
-                    toPeerId: account.peerId
-                )
-                signal = signal
-                |> then(self.insertLocalMessage(account: account, peerId: simulatedPeerId, text: "", media: [media], incoming: true, notify: false) |> ignoreValues)
-            }
-            return signal
-            |> afterCompleted {
-                UserDefaults.standard.set(true, forKey: key)
-            }
-        }
-    }
-    
-    private static func giftsSeededKey(for peerId: PeerId) -> String {
-        return "telegram.messageSimulation.giftsSeeded.\(peerId.toInt64())"
     }
     
     private static func media(for gift: StarGift, text: String?, entities: [MessageTextEntity]?, nameHidden: Bool, savedToProfile: Bool, convertStars: Int64?, canUpgrade: Bool, upgradeStars: Int64?, includeUpgrade: Bool, isRefunded: Bool, canExportDate: Int32?, transferStars: Int64?, canTransferDate: Int32?, canResaleDate: Int32?, dropOriginalDetailsStars: Int64?, number: Int32?, canCraftAt: Int32?, senderId: PeerId, toPeerId: PeerId) -> TelegramMediaAction {
@@ -529,6 +448,51 @@ public enum MessageSimulationOverlay {
                 disposable.dispose()
                 let _ = context
             }
+        }
+    }
+    
+    private static func prefetchGiftFiles(account: Account, message: Message) {
+        var files: [TelegramMediaFile] = []
+        for media in message.media {
+            guard let action = media as? TelegramMediaAction else {
+                continue
+            }
+            switch action.action {
+            case let .starGift(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
+                files.append(contentsOf: self.animationFiles(for: gift))
+            case let .starGiftUnique(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
+                files.append(contentsOf: self.animationFiles(for: gift))
+            default:
+                break
+            }
+        }
+        for file in files {
+            let _ = fetchedMediaResource(
+                mediaBox: account.postbox.mediaBox,
+                userLocation: .other,
+                userContentType: .sticker,
+                reference: FileMediaReference.forGiftFile(file, message: message).resourceReference(file.resource)
+            ).start()
+        }
+    }
+    
+    private static func animationFiles(for gift: StarGift) -> [TelegramMediaFile] {
+        switch gift {
+        case let .generic(generic):
+            return [generic.file]
+        case let .unique(unique):
+            var files: [TelegramMediaFile] = []
+            for attribute in unique.attributes {
+                switch attribute {
+                case let .model(_, file, _, _):
+                    files.append(file)
+                case let .pattern(_, file, _):
+                    files.append(file)
+                default:
+                    break
+                }
+            }
+            return files
         }
     }
     

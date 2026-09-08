@@ -559,6 +559,10 @@ public final class GiftItemComponent: Component {
                     file: gift.file
                 )
                 animationOffset = 16.0
+                if !self.fetchedFiles.contains(gift.file.fileId.id) {
+                    self.disposables.add(freeMediaFileResourceInteractiveFetched(account: component.context.account, userLocation: .other, fileReference: .forGiftFile(gift.file), resource: gift.file.resource).start())
+                    self.fetchedFiles.insert(gift.file.fileId.id)
+                }
             case let .uniqueGift(gift, _):
                 animationOffset = 16.0
                 for attribute in gift.attributes {
@@ -566,7 +570,7 @@ public final class GiftItemComponent: Component {
                     case let .model(_, file, _, _):
                         animationFile = file
                         if !self.fetchedFiles.contains(file.fileId.id) {
-                            self.disposables.add(freeMediaFileResourceInteractiveFetched(account: component.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
+                            self.disposables.add(freeMediaFileResourceInteractiveFetched(account: component.context.account, userLocation: .other, fileReference: .forGiftFile(file), resource: file.resource).start())
                             self.fetchedFiles.insert(file.fileId.id)
                         }
                     case let .pattern(_, file, _):
@@ -611,6 +615,10 @@ public final class GiftItemComponent: Component {
                     fileId: gift.file.fileId.id,
                     file: gift.file
                 )
+                if !self.fetchedFiles.contains(gift.file.fileId.id) {
+                    self.disposables.add(freeMediaFileResourceInteractiveFetched(account: component.context.account, userLocation: .other, fileReference: .forGiftFile(gift.file), resource: gift.file.resource).start())
+                    self.fetchedFiles.insert(gift.file.fileId.id)
+                }
                 
                 let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
                 
@@ -657,7 +665,7 @@ public final class GiftItemComponent: Component {
                     case let .model(_, file, _, _):
                         animationFile = file
                         if !self.fetchedFiles.contains(file.fileId.id) {
-                            self.disposables.add(freeMediaFileResourceInteractiveFetched(account: component.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
+                            self.disposables.add(freeMediaFileResourceInteractiveFetched(account: component.context.account, userLocation: .other, fileReference: .forGiftFile(file), resource: file.resource).start())
                             self.fetchedFiles.insert(file.fileId.id)
                         }
                     case let .pattern(_, file, _):

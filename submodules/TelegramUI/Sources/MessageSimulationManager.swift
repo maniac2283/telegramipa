@@ -89,7 +89,6 @@ final class MessageSimulationManager {
                     return next
                 }).start()
                 return MessageSimulationOverlay.applyToPostbox(account: account, simulatedPeerId: state.simulatedPeerId)
-                |> then(MessageSimulationOverlay.seedSourceGiftsIfNeeded(account: account, simulatedPeerId: state.simulatedPeerId))
             } else {
                 return .complete()
             }
@@ -119,7 +118,6 @@ final class MessageSimulationManager {
                 continue
             }
             self.inFlightOutgoingIds.insert(id)
-            let peerId = id.peerId
             let pipeline = Signal<Void, NoError>.single(Void())
             |> delay(0.35, queue: Queue.mainQueue())
             |> mapToSignal { _ in
@@ -130,27 +128,6 @@ final class MessageSimulationManager {
                 |> delay(0.5, queue: Queue.mainQueue())
                 |> mapToSignal { _ in
                     return MessageSimulationOverlay.markOutgoingRead(account: account, messageId: id)
-                }
-            )
-            |> then(
-                account.postbox.transaction { transaction -> (String, Bool) in
-                    if let message = transaction.getMessage(id) {
-                        let hasMedia = message.media.contains(where: { $0 is TelegramMediaImage || $0 is TelegramMediaFile })
-                        return (message.text, hasMedia)
-                    }
-                    return ("", false)
-                }
-                |> delay(0.3, queue: Queue.mainQueue())
-                |> mapToSignal { text, hasMedia -> Signal<Never, NoError> in
-                    account.addSimulatedPeerInputActivity(chatPeerId: peerId, peerId: peerId, activity: .typingText)
-                    let replyText = MessageSimulationOverlay.simulatedReplyText(to: text, hasMedia: hasMedia)
-                    let typingDelay = min(2.4, 0.8 + Double(replyText.count) * 0.04)
-                    return Signal<Void, NoError>.single(Void())
-                    |> delay(typingDelay, queue: Queue.mainQueue())
-                    |> mapToSignal { _ in
-                        return MessageSimulationOverlay.insertIncomingMessage(account: account, peerId: peerId, text: replyText, media: [], notify: true)
-                        |> ignoreValues
-                    }
                 }
             )
             self.disposable.add(pipeline.start(completed: { [weak self] in

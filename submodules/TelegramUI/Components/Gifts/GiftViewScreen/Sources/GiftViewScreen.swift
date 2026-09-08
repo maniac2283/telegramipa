@@ -247,9 +247,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 for attribute in upgradePreview.attributes {
                                     switch attribute {
                                     case let .model(_, file, _, _):
-                                        self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
+                                        self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .forGiftFile(file), resource: file.resource).start())
                                     case let .pattern(_, file, _):
-                                        self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
+                                        self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .forGiftFile(file), resource: file.resource).start())
                                     default:
                                         break
                                     }
@@ -274,9 +274,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                             for attribute in upgradePreview.attributes {
                                 switch attribute {
                                 case let .model(_, file, _, _):
-                                    self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
+                                    self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .forGiftFile(file), resource: file.resource).start())
                                 case let .pattern(_, file, _):
-                                    self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
+                                    self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .forGiftFile(file), resource: file.resource).start())
                                 default:
                                     break
                                 }

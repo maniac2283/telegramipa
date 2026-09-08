@@ -877,6 +877,29 @@ public enum MediaReference<T: Media> {
 public typealias FileMediaReference = MediaReference<TelegramMediaFile>
 public typealias ImageMediaReference = MediaReference<TelegramMediaImage>
 
+extension FileMediaReference {
+    public static func forGiftFile(_ file: TelegramMediaFile, message: Message? = nil) -> FileMediaReference {
+        if let message, message.id.namespace == Namespaces.Message.Cloud {
+            return .message(message: MessageReference(message), media: file)
+        }
+        for attribute in file.attributes {
+            switch attribute {
+            case let .Sticker(_, packReference, _):
+                if let packReference {
+                    return .stickerPack(stickerPack: packReference, media: file)
+                }
+            case let .CustomEmoji(_, _, _, packReference):
+                if let packReference {
+                    return .stickerPack(stickerPack: packReference, media: file)
+                }
+            default:
+                break
+            }
+        }
+        return .standalone(media: file)
+    }
+}
+
 public enum MediaResourceReference: Equatable {
     case media(media: AnyMediaReference, resource: MediaResource)
     case standalone(resource: MediaResource)
