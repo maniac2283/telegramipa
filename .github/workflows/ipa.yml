@@ -1,0 +1,182 @@
+# Builds Telegram-iOS with the official Make.py IPA path and uploads Telegram.ipa.
+#
+# Default: Telegram's bundled fake-codesigning (same as the upstream GitHub CI).
+# Optional Apple secrets, when all of these are set, produce a real signed IPA:
+#   APPLE_CERTIFICATE_P12_BASE64, APPLE_CERTIFICATE_PASSWORD,
+#   APPLE_PROVISIONING_PROFILES_BASE64, APPLE_TEAM_ID,
+#   TELEGRAM_BUNDLE_ID, TELEGRAM_API_ID, TELEGRAM_API_HASH
+#
+# Optional secrets used only with Apple signing:
+#   TELEGRAM_IS_APPSTORE_BUILD, TELEGRAM_IS_INTERNAL_BUILD, TELEGRAM_APPSTORE_ID,
+#   TELEGRAM_URL_SCHEME, TELEGRAM_PREMIUM_IAP_PRODUCT_ID,
+#   TELEGRAM_ENABLE_SIRI, TELEGRAM_ENABLE_ICLOUD
+
+name: Build IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master, main]
+
+concurrency:
+  group: ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ipa:
+    runs-on: macos-15
+    timeout-minutes: 360
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Select Xcode
+        run: |
+          set -euo pipefail
+          XCODE_VERSION="$(python3 -c 'import json; print(json.load(open("versions.json"))["xcode"])')"
+          CANDIDATE="/Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer"
+          if [ -d "$CANDIDATE" ]; then
+            sudo xcode-select -s "$CANDIDATE"
+            echo "OVERRIDE_XCODE=" >> "$GITHUB_ENV"
+          else
+            echo "Xcode ${XCODE_VERSION} is not installed; using $(xcode-select -p) and --overrideXcodeVersion"
+            echo "OVERRIDE_XCODE=--overrideXcodeVersion" >> "$GITHUB_ENV"
+          fi
+          xcodebuild -version
+
+      - name: Prepare codesigning
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_PROVISIONING_PROFILES_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILES_BASE64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TELEGRAM_BUNDLE_ID: ${{ secrets.TELEGRAM_BUNDLE_ID }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+          TELEGRAM_IS_APPSTORE_BUILD: ${{ secrets.TELEGRAM_IS_APPSTORE_BUILD }}
+          TELEGRAM_IS_INTERNAL_BUILD: ${{ secrets.TELEGRAM_IS_INTERNAL_BUILD }}
+          TELEGRAM_APPSTORE_ID: ${{ secrets.TELEGRAM_APPSTORE_ID }}
+          TELEGRAM_URL_SCHEME: ${{ secrets.TELEGRAM_URL_SCHEME }}
+          TELEGRAM_PREMIUM_IAP_PRODUCT_ID: ${{ secrets.TELEGRAM_PREMIUM_IAP_PRODUCT_ID }}
+          TELEGRAM_ENABLE_SIRI: ${{ secrets.TELEGRAM_ENABLE_SIRI }}
+          TELEGRAM_ENABLE_ICLOUD: ${{ secrets.TELEGRAM_ENABLE_ICLOUD }}
+        run: |
+          set -euo pipefail
+          export SIGNING_DIR="${RUNNER_TEMP}/telegram-codesigning"
+          mkdir -p "${SIGNING_DIR}/certs" "${SIGNING_DIR}/profiles"
+          echo "SIGNING_DIR=${SIGNING_DIR}" >> "$GITHUB_ENV"
+
+          if [ -n "${APPLE_CERTIFICATE_P12_BASE64:-}" ] && [ -n "${APPLE_CERTIFICATE_PASSWORD:-}" ] && [ -n "${APPLE_PROVISIONING_PROFILES_BASE64:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ] && [ -n "${TELEGRAM_BUNDLE_ID:-}" ] && [ -n "${TELEGRAM_API_ID:-}" ] && [ -n "${TELEGRAM_API_HASH:-}" ]; then
+            echo "Using Apple signing credentials from GitHub secrets"
+            python3 - <<'PY'
+          import json, os
+          config = {
+              "bundle_id": os.environ["TELEGRAM_BUNDLE_ID"],
+              "api_id": os.environ["TELEGRAM_API_ID"],
+              "api_hash": os.environ["TELEGRAM_API_HASH"],
+              "team_id": os.environ["APPLE_TEAM_ID"],
+              "app_center_id": "0",
+              "is_internal_build": os.environ.get("TELEGRAM_IS_INTERNAL_BUILD") or "true",
+              "is_appstore_build": os.environ.get("TELEGRAM_IS_APPSTORE_BUILD") or "false",
+              "appstore_id": os.environ.get("TELEGRAM_APPSTORE_ID") or "0",
+              "app_specific_url_scheme": os.environ.get("TELEGRAM_URL_SCHEME") or "tg",
+              "premium_iap_product_id": os.environ.get("TELEGRAM_PREMIUM_IAP_PRODUCT_ID") or "",
+              "enable_siri": (os.environ.get("TELEGRAM_ENABLE_SIRI") or "false").lower() == "true",
+              "enable_icloud": (os.environ.get("TELEGRAM_ENABLE_ICLOUD") or "false").lower() == "true",
+          }
+          path = os.path.join(os.environ["SIGNING_DIR"], "configuration.json")
+          with open(path, "w") as handle:
+              json.dump(config, handle, indent=2)
+              handle.write("\n")
+          PY
+
+            CERT_P12="${RUNNER_TEMP}/apple-certificate.p12"
+            echo "$APPLE_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT_P12"
+            PEM="${RUNNER_TEMP}/apple-identity.pem"
+            EMPTY_P12="${SIGNING_DIR}/certs/distribution.p12"
+            if openssl pkcs12 -in "$CERT_P12" -passin env:APPLE_CERTIFICATE_PASSWORD -nodes -out "$PEM" 2>/dev/null; then
+              :
+            else
+              openssl pkcs12 -in "$CERT_P12" -passin env:APPLE_CERTIFICATE_PASSWORD -nodes -legacy -out "$PEM"
+            fi
+            openssl pkcs12 -export -in "$PEM" -out "$EMPTY_P12" -passout pass:
+            rm -f "$CERT_P12" "$PEM"
+
+            PROFILES_ZIP="${RUNNER_TEMP}/provisioning-profiles.zip"
+            echo "$APPLE_PROVISIONING_PROFILES_BASE64" | base64 --decode > "$PROFILES_ZIP"
+            unzip -o -j "$PROFILES_ZIP" -d "${SIGNING_DIR}/profiles"
+            rm -f "$PROFILES_ZIP"
+            find "${SIGNING_DIR}/profiles" -type f ! -name '*.mobileprovision' -delete
+            if ! ls "${SIGNING_DIR}/profiles"/*.mobileprovision >/dev/null 2>&1; then
+              echo "APPLE_PROVISIONING_PROFILES_BASE64 did not contain any .mobileprovision files"
+              exit 1
+            fi
+          else
+            echo "Apple secrets not set; using official fake-codesigning"
+            cp build-system/appstore-configuration.json "${SIGNING_DIR}/configuration.json"
+            cp -R build-system/fake-codesigning/. "${SIGNING_DIR}/"
+          fi
+
+      - name: Create canonical source directory
+        run: |
+          set -euo pipefail
+          sudo mkdir -p /Users/Shared
+          rsync -a --delete \
+            --exclude '.git/' \
+            --exclude 'bazel-bin/' \
+            --exclude 'bazel-out/' \
+            --exclude 'bazel-testlogs/' \
+            --exclude 'build/' \
+            "$GITHUB_WORKSPACE/" /Users/Shared/telegram-ios/
+          rsync -a "${SIGNING_DIR}/" /Users/Shared/telegram-ios/ci-codesigning/
+
+      - name: Import signing certificates
+        working-directory: /Users/Shared/telegram-ios
+        run: |
+          set -euo pipefail
+          python3 build-system/Make/ImportCertificates.py --path ci-codesigning/certs
+
+      - name: Build the app
+        working-directory: /Users/Shared/telegram-ios
+        run: |
+          set -euo pipefail
+          BAZEL_USER_ROOT="/private/var/tmp/_bazel_github_actions"
+          BUILD_NUMBER_OFFSET="$(cat build_number_offset)"
+          APP_VERSION="$(python3 -c 'import json; print(json.load(open("versions.json"))["app"])')"
+          COMMIT_COUNT="$(git -C "$GITHUB_WORKSPACE" rev-list --count HEAD)"
+          BUILD_NUMBER="$((COMMIT_COUNT + BUILD_NUMBER_OFFSET))"
+          echo "BUILD_NUMBER=${BUILD_NUMBER}" >> "$GITHUB_ENV"
+          echo "APP_VERSION=${APP_VERSION}" >> "$GITHUB_ENV"
+
+          python3 -u build-system/Make/Make.py \
+            ${OVERRIDE_XCODE} \
+            --bazelUserRoot="$BAZEL_USER_ROOT" \
+            build \
+            --configurationPath=ci-codesigning/configuration.json \
+            --codesigningInformationPath=ci-codesigning \
+            --configuration=release_arm64 \
+            --buildNumber="$BUILD_NUMBER" \
+            --outputBuildArtifactsPath=build/artifacts
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Telegram-${{ env.APP_VERSION }}-${{ env.BUILD_NUMBER }}
+          path: |
+            /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa
+            /Users/Shared/telegram-ios/build/artifacts/Telegram.DSYMs.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Clean signing material
+        if: always()
+        run: |
+          set +e
+          security delete-keychain temp.keychain
+          rm -rf "${SIGNING_DIR:-}" /Users/Shared/telegram-ios/ci-codesigning
+          security list-keychains -d user -s login.keychain
