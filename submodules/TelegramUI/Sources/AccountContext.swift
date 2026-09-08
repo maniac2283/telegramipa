@@ -506,9 +506,18 @@ public final class AccountContextImpl: AccountContext {
             (self.animationRenderer as? DCTMultiAnimationRendererImpl)?.useYuvA = settings.compressedEmojiCache
         })
         
-        self.profileSpoofingManager = ProfileSpoofingManager(context: self)
-        self.messageSimulationManager = MessageSimulationManager(context: self)
-        self.friendSpoofingManager = FriendSpoofingManager(context: self)
+        if sharedContext.applicationBindings.isMainApp && !temp {
+            Queue.mainQueue().after(0.5, { [weak self] in
+                guard let self else {
+                    return
+                }
+                if self.profileSpoofingManager == nil {
+                    self.profileSpoofingManager = ProfileSpoofingManager(context: self)
+                    self.messageSimulationManager = MessageSimulationManager(context: self)
+                    self.friendSpoofingManager = FriendSpoofingManager(context: self)
+                }
+            })
+        }
     }
     
     deinit {
