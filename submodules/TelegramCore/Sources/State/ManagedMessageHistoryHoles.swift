@@ -192,6 +192,20 @@ private final class ManagedMessageHistoryHolesContext {
             let entry = pendingEntry.entry
             switch pendingEntry.entry.hole {
             case let .peer(hole):
+                if MessageSimulationOverlay.isSimulatedPeer(hole.peerId) {
+                    pendingEntry.disposable.set((self.postbox.transaction { transaction in
+                        transaction.removeHole(peerId: hole.peerId, threadId: hole.threadId, namespace: hole.namespace, space: pendingEntry.entry.space, range: 1 ... (Int32.max - 1))
+                    }
+                    |> deliverOn(self.queue)).start(completed: { [weak self] in
+                        guard let self = self else {
+                            return
+                        }
+                        self.pendingEntries.removeAll(where: { $0.id == id })
+                        self.completedEntries[entry] = CFAbsoluteTimeGetCurrent()
+                        self.update(entries: self.currentEntries)
+                    }))
+                    continue
+                }
                 pendingEntry.disposable.set((fetchMessageHistoryHole(
                     accountPeerId: self.accountPeerId,
                     source: .network(self.network),

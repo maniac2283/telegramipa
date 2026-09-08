@@ -305,6 +305,16 @@ public func updatePeersCustom(transaction: Transaction, peers: [Peer], update: (
             updated = TelegramUser.merge(lhs: previous, rhs: updatedUser)
         }
         
+        if let updatedUser = updated as? TelegramUser {
+            updated = ProfileSpoofingOverlay.applyVisual(to: updatedUser)
+            if let overlayUser = updated as? TelegramUser {
+                updated = MessageSimulationOverlay.applyVisual(to: overlayUser)
+            }
+            if let overlayUser = updated as? TelegramUser {
+                updated = FriendSpoofingOverlay.applyVisual(to: overlayUser)
+            }
+        }
+        
         if let updatedChannel = updated as? TelegramChannel {
             var wasMember = false
             var wasHidden: Bool?
@@ -320,6 +330,10 @@ public func updatePeersCustom(transaction: Transaction, peers: [Peer], update: (
                     _internal_updateChannelMembership(transaction: transaction, channel: updated, isMember: isMember, justJoined: previous == nil || wasHidden == nil)
                 }
             }
+        }
+        
+        if let updatedChannel = updated as? TelegramChannel {
+            updated = ChannelSpoofingOverlay.applyVisual(to: updatedChannel)
         }
         if let updatedCommunity = updated as? TelegramCommunity {
             updated = mergeCommunity(lhs: previous as? TelegramCommunity, rhs: updatedCommunity)

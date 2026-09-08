@@ -412,6 +412,8 @@ public final class PendingMessageManager {
         self.queue.async {
             Logger.shared.log("PendingMessageManager", "update: \(messageIds)")
             
+            let messageIds = Set(messageIds.filter { !MessageSimulationOverlay.isSimulatedPeer($0.peerId) })
+            
             let addedMessageIds = messageIds.subtracting(self.pendingMessageIds)
             let removedMessageIds = self.pendingMessageIds.subtracting(messageIds)
             let removedSecretMessageIds = Set(removedMessageIds.filter({ $0.peerId.namespace == Namespaces.Peer.SecretChat }))

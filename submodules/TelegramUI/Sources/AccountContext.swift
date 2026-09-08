@@ -168,6 +168,9 @@ public final class AccountContextImpl: AccountContext {
     private var managedAppSpecificContactsDisposable: Disposable?
     
     private var experimentalUISettingsDisposable: Disposable?
+    private var profileSpoofingManager: ProfileSpoofingManager?
+    private var messageSimulationManager: MessageSimulationManager?
+    private var friendSpoofingManager: FriendSpoofingManager?
     
     public let cachedGroupCallContexts: AccountGroupCallContextCache
     
@@ -502,6 +505,10 @@ public final class AccountContextImpl: AccountContext {
             }
             (self.animationRenderer as? DCTMultiAnimationRendererImpl)?.useYuvA = settings.compressedEmojiCache
         })
+        
+        self.profileSpoofingManager = ProfileSpoofingManager(context: self)
+        self.messageSimulationManager = MessageSimulationManager(context: self)
+        self.friendSpoofingManager = FriendSpoofingManager(context: self)
     }
     
     deinit {

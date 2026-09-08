@@ -51,6 +51,10 @@ func chatHistoryViewForLocation(
     orderStatistics: MessageHistoryViewOrderStatistics = [],
     useRootInterfaceStateForThread: Bool = false
 ) -> Signal<ChatHistoryViewUpdate, NoError> {
+    var chatLocation = chatLocation
+    if !scheduled, case let .peer(peerId) = chatLocation, let sourceId = ChannelSpoofingOverlay.historyPeerId(for: peerId), sourceId != peerId {
+        chatLocation = .peer(id: sourceId)
+    }
     let account = context.account
     if scheduled {
         var first = true

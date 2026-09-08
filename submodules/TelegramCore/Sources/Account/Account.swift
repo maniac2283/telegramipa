@@ -1637,6 +1637,12 @@ public class Account {
         }
     }
     
+    public func addSimulatedPeerInputActivity(chatPeerId: PeerId, peerId: PeerId, activity: PeerInputActivity) {
+        self.peerInputActivityManager.transaction { manager in
+            manager.addActivity(chatPeerId: PeerActivitySpace(peerId: chatPeerId, category: .global), peerId: peerId, activity: activity)
+        }
+    }
+    
     public func updateLocalInputActivity(peerId: PeerActivitySpace, activity: PeerInputActivity, isPresent: Bool) {
         self.localInputActivityManager.transaction { manager in
             if isPresent {

@@ -166,6 +166,13 @@ enum PeerReadStateValidationError {
 }
 
 private func validatePeerReadState(network: Network, postbox: Postbox, stateManager: AccountStateManager, peerId: PeerId) -> Signal<Never, PeerReadStateValidationError> {
+    if MessageSimulationOverlay.isSimulatedPeer(peerId) {
+        return postbox.transaction { transaction -> Void in
+            transaction.confirmSynchronizedIncomingReadState(peerId)
+        }
+        |> castError(PeerReadStateValidationError.self)
+        |> ignoreValues
+    }
     let readStateWithInitialState = dialogReadState(network: network, postbox: postbox, peerId: peerId)
     
     let maybeAppliedReadState = readStateWithInitialState

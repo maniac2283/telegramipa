@@ -20,6 +20,9 @@ func fetchAndUpdateSupplementalCachedPeerData(peerId rawPeerId: PeerId, accountP
             guard let rawPeer = transaction.getPeer(rawPeerId) else {
                 return .single(false)
             }
+            if MessageSimulationOverlay.isSimulatedPeer(rawPeerId) {
+                return .single(true)
+            }
             
             let peer: Peer
             if let secretChat = rawPeer as? TelegramSecretChat {
@@ -196,6 +199,9 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
             }
         }
         |> mapToSignal { inputUser, maybePeer, peerId -> Signal<Bool, NoError> in
+            if MessageSimulationOverlay.isSimulatedPeer(peerId) {
+                return .single(true)
+            }
             if let inputUser = inputUser {
                 let editableBotInfo: Signal<EditableBotInfo?, NoError>
                 if let user = maybePeer as? TelegramUser, let botInfo = user.botInfo, botInfo.flags.contains(.canEdit) {
@@ -474,7 +480,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                             }
                                         }
                                     
-                                        return previous.withUpdatedAbout(userFullAbout)
+                                        let updatedCachedData = previous.withUpdatedAbout(userFullAbout)
                                             .withUpdatedBotInfo(botInfo)
                                             .withUpdatedEditableBotInfo(editableBotInfo)
                                             .withUpdatedCommonGroupCount(userFullCommonChatsCount)
@@ -516,6 +522,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                             .withUpdatedSavedMusic(mappedSavedMusic)
                                             .withUpdatedNote(mappedNote)
                                             .withUpdatedBotManagerId(botManagerId.flatMap { PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value($0)) })
+                                        return FriendSpoofingOverlay.applyCached(peerId: peerId, data: MessageSimulationOverlay.applyCached(peerId: peerId, data: ProfileSpoofingOverlay.applyCached(peerId: peerId, data: updatedCachedData)))
                                 }
                             })
                         }
@@ -920,7 +927,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                                 
                                                 let mappedGuardBotId = guardBotId.flatMap { EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value($0)) }
                                                 
-                                                return previous.withUpdatedFlags(channelFlags)
+                                                let updatedCachedData = previous.withUpdatedFlags(channelFlags)
                                                     .withUpdatedAbout(about)
                                                     .withUpdatedParticipantsSummary(CachedChannelParticipantsSummary(memberCount: participantsCount, adminCount: adminsCount, bannedCount: bannedCount, kickedCount: kickedCount))
                                                     .withUpdatedExportedInvitation(apiExportedInvite.flatMap { ExportedInvitation(apiExportedInvite: $0) })
@@ -957,6 +964,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                                     .withUpdatedSendPaidMessageStars(mappedSendPaidMessageStars)
                                                     .withUpdatedMainProfileTab(mappedMainProfileTab)
                                                     .withUpdatedGuardBotId(mappedGuardBotId)
+                                                return ChannelSpoofingOverlay.applyCached(peerId: peerId, data: updatedCachedData)
                                             })
                                         
                                             if let minAvailableMessageId = minAvailableMessageId, minAvailableMessageIdUpdated {

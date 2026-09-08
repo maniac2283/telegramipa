@@ -2015,6 +2015,12 @@ public final class AccountStateManager {
         }
     }
     
+    public func notifyIncomingMessages(_ messages: [Message], notify: Bool) {
+        self.impl.with { impl in
+            impl.notificationMessagesPipe.putNext([(messages, .root, notify, nil)])
+        }
+    }
+    
     func injectStoryUpdates(updates: [InternalStoryUpdate]) {
         self.impl.with { impl in
             impl.storyUpdatesPipe.putNext(updates)
