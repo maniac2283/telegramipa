@@ -70,7 +70,7 @@ public enum MessageSimulationOverlay {
         guard let state = self.current(for: peerId), let target = state.sourceCachedData else {
             return data
         }
-        return ProfileSpoofingOverlay.mergeCached(selfData: data, target: target).withUpdatedPeerStatusSettings(PeerStatusSettings(flags: [], managingBot: nil))
+        return ProfileSpoofingOverlay.mergeCached(selfData: data, target: target).withUpdatedPeerStatusSettings(PeerStatusSettings(flags: [], managingBot: nil)).withUpdatedBusinessIntro(nil)
     }
     
     public static func makeSimulatedUser(simulatedId: PeerId, target: TelegramUser) -> TelegramUser {
@@ -112,21 +112,28 @@ public enum MessageSimulationOverlay {
             })
             transaction.updatePeerCachedData(peerIds: [simulatedPeerId], update: { _, current in
                 let base = (current as? CachedUserData) ?? CachedUserData()
+                let merged: CachedUserData
                 if let targetCached = state.sourceCachedData {
-                    return ProfileSpoofingOverlay.mergeCached(selfData: base, target: targetCached).withUpdatedPeerStatusSettings(PeerStatusSettings(flags: [], managingBot: nil))
+                    merged = ProfileSpoofingOverlay.mergeCached(selfData: base, target: targetCached)
+                } else {
+                    merged = base
                 }
-                return base.withUpdatedPeerStatusSettings(PeerStatusSettings(flags: [], managingBot: nil))
+                return merged
+                    .withUpdatedPeerStatusSettings(PeerStatusSettings(flags: [], managingBot: nil))
+                    .withUpdatedBusinessIntro(nil)
             })
             let timestamp = Int32(Date().timeIntervalSince1970)
             transaction.updatePeerPresencesInternal(presences: [simulatedPeerId: TelegramUserPresence(status: .present(until: timestamp + 300), lastActivity: timestamp)], merge: { _, updated in
                 return updated
             })
-            transaction.removeHole(peerId: simulatedPeerId, threadId: nil, namespace: Namespaces.Message.Cloud, space: .everywhere, range: 1 ... (Int32.max - 1))
+            self.prepareLocalHistory(transaction: transaction, peerId: simulatedPeerId)
+            transaction.updatePeerChatListInclusion(simulatedPeerId, inclusion: .ifHasMessagesOrOneOf(groupId: .root, pinningIndex: nil, minTimestamp: timestamp))
             if transaction.getCombinedPeerReadState(simulatedPeerId) == nil {
                 transaction.resetIncomingReadStates([simulatedPeerId: [
                     Namespaces.Message.Local: .idBased(maxIncomingReadId: 0, maxOutgoingReadId: 0, maxKnownId: 0, count: 0, markedUnread: false)
                 ]])
             }
+            transaction.confirmSynchronizedIncomingReadState(simulatedPeerId)
         }
         |> ignoreValues
     }
@@ -146,7 +153,7 @@ public enum MessageSimulationOverlay {
             let storeMessage = StoreMessage(peerId: peerId, namespace: Namespaces.Message.Local, customStableId: nil, globallyUniqueId: randomId, groupingKey: nil, threadId: nil, timestamp: timestamp, flags: [.Incoming], tags: tags, globalTags: globalTags, localTags: [], forwardInfo: nil, authorId: peerId, text: text, attributes: [], media: media)
             let ids = transaction.addMessages([storeMessage], location: .UpperHistoryBlock)
             transaction.updatePeerChatListInclusion(peerId, inclusion: .ifHasMessagesOrOneOf(groupId: .root, pinningIndex: nil, minTimestamp: timestamp))
-            transaction.removeHole(peerId: peerId, threadId: nil, namespace: Namespaces.Message.Cloud, space: .everywhere, range: 1 ... (Int32.max - 1))
+            self.prepareLocalHistory(transaction: transaction, peerId: peerId)
             if let messageId = ids[randomId] {
                 return transaction.getMessage(messageId)
             }
@@ -204,5 +211,11 @@ public enum MessageSimulationOverlay {
             "Thanks for the update"
         ]
         return replies.randomElement() ?? "Got it"
+    }
+    
+    public static func prepareLocalHistory(transaction: Transaction, peerId: PeerId) {
+        for namespace in [Namespaces.Message.Cloud, Namespaces.Message.Local] {
+            transaction.removeHole(peerId: peerId, threadId: nil, namespace: namespace, space: .everywhere, range: 1 ... (Int32.max - 1))
+        }
     }
 }

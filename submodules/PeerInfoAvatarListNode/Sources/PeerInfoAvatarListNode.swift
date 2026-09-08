@@ -897,6 +897,7 @@ public final class PeerInfoAvatarListContainerNode: ASDisplayNode {
     private let disposable = MetaDisposable()
     private let positionDisposable = MetaDisposable()
     private var initializedList = false
+    private var initializedPhotosPeerId: EnginePeer.Id?
     private var ignoreNextProfilePhotoUpdate = false
     public var itemsUpdated: (([PeerInfoAvatarListItem]) -> Void)?
     public var currentIndexUpdated: (() -> Void)?
@@ -1453,6 +1454,13 @@ public final class PeerInfoAvatarListContainerNode: ASDisplayNode {
         self.leftHighlightNode.frame = CGRect(origin: CGPoint(), size: CGSize(width: fadeWidth, height: size.height))
         self.rightHighlightNode.frame = CGRect(origin: CGPoint(x: size.width - fadeWidth, y: 0.0), size: CGSize(width: fadeWidth, height: size.height))
         
+        if let peer = peer {
+            let photosPeerId = PeerDisplayOverlay.mediaSourcePeerId(for: peer.id)
+            if self.initializedPhotosPeerId != photosPeerId {
+                self.initializedList = false
+                self.initializedPhotosPeerId = photosPeerId
+            }
+        }
         if let peer = peer, !self.initializedList {
             self.initializedList = true
                     
@@ -1461,7 +1469,7 @@ public final class PeerInfoAvatarListContainerNode: ASDisplayNode {
                 return representation.flatMap { AvatarGalleryEntry(representation: $0.0, peer: peer) }
             }
             
-            self.disposable.set(combineLatest(queue: Queue.mainQueue(), peerInfoProfilePhotosWithCache(context: self.context, peerId: peer.id), entry).startStrict(next: { [weak self] completeAndEntries, entry in
+            self.disposable.set(combineLatest(queue: Queue.mainQueue(), peerInfoProfilePhotosWithCache(context: self.context, peerId: PeerDisplayOverlay.mediaSourcePeerId(for: peer.id)), entry).startStrict(next: { [weak self] completeAndEntries, entry in
                 guard let strongSelf = self else {
                     return
                 }

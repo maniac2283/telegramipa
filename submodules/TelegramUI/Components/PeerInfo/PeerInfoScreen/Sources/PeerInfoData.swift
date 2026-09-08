@@ -1011,7 +1011,7 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
         tonState = .single(nil)
     }
     
-    let profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: peerId)
+    let profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: PeerDisplayOverlay.mediaSourcePeerId(for: peerId))
     
     let businessConnectedBot = context.engine.data.subscribe(
         TelegramEngine.EngineData.Item.Peer.BusinessConnectedBot(id: context.account.peerId)
@@ -1174,8 +1174,8 @@ func peerInfoScreenData(
     forceHasGifts: Bool,
     switchToUpgradableGifts: Bool
 ) -> Signal<PeerInfoScreenData, NoError> {
-    return peerInfoScreenInputData(context: context, peerId: peerId, isSettings: isSettings)
-    |> mapToSignal { inputData -> Signal<PeerInfoScreenData, NoError> in
+    return combineLatest(peerInfoScreenInputData(context: context, peerId: peerId, isSettings: isSettings), PeerDisplayOverlay.updated)
+    |> mapToSignal { inputData, _ -> Signal<PeerInfoScreenData, NoError> in
         let wasUpgradedGroup = Atomic<Bool?>(value: nil)
         
         switch inputData {
@@ -1241,9 +1241,15 @@ func peerInfoScreenData(
             let profileGiftsContext: ProfileGiftsContext?
             let profileGiftsCollectionsContext: ProfileGiftsCollectionsContext?
             if case .user = kind {
+                let giftsPeerId = PeerDisplayOverlay.mediaSourcePeerId(for: userPeerId)
                 if isMyProfile || userPeerId != context.account.peerId {
-                    profileGiftsContext = existingProfileGiftsContext ?? ProfileGiftsContext(account: context.account, peerId: userPeerId)
-                    profileGiftsCollectionsContext = existingProfileGiftsCollectionsContext ?? ProfileGiftsCollectionsContext(account: context.account, peerId: userPeerId, allGiftsContext: profileGiftsContext)
+                    if giftsPeerId != userPeerId {
+                        profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: giftsPeerId, filter: ProfileGiftsContext.Filters.All.subtracting(.hidden))
+                        profileGiftsCollectionsContext = ProfileGiftsCollectionsContext(account: context.account, peerId: giftsPeerId, allGiftsContext: profileGiftsContext)
+                    } else {
+                        profileGiftsContext = existingProfileGiftsContext ?? ProfileGiftsContext(account: context.account, peerId: userPeerId)
+                        profileGiftsCollectionsContext = existingProfileGiftsCollectionsContext ?? ProfileGiftsCollectionsContext(account: context.account, peerId: userPeerId, allGiftsContext: profileGiftsContext)
+                    }
                     
                     if switchToUpgradableGifts {
                         profileGiftsContext?.updateFilter([.displayed, .hidden, .limitedUpgradable])
@@ -1888,8 +1894,9 @@ func peerInfoScreenData(
                 }
             }
             
-            let profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: peerId)
-            let profileGiftsCollectionsContext = ProfileGiftsCollectionsContext(account: context.account, peerId: peerId, allGiftsContext: profileGiftsContext)
+            let giftsPeerId = PeerDisplayOverlay.mediaSourcePeerId(for: peerId)
+            let profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: giftsPeerId)
+            let profileGiftsCollectionsContext = ProfileGiftsCollectionsContext(account: context.account, peerId: giftsPeerId, allGiftsContext: profileGiftsContext)
             
             let personalChannel = peerInfoPersonalOrLinkedChannel(context: context, peerId: peerId, isSettings: false)
             

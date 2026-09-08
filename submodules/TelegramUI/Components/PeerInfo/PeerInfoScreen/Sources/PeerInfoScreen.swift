@@ -6545,7 +6545,11 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         }
         
         if isMyProfile, let profileGiftsContext {
-            profileGiftsContext.updateFilter(.All)
+            if PeerDisplayOverlay.mediaSourcePeerId(for: peerId) == peerId {
+                profileGiftsContext.updateFilter(.All)
+            } else {
+                profileGiftsContext.updateFilter([.displayed])
+            }
             profileGiftsContext.updateSorting(.date)
             profileGiftsContext.reload()
         }

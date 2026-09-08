@@ -48,6 +48,44 @@ public enum PeerDisplayOverlay {
         return EngineRenderedPeer(peerId: rendered.peerId, peers: peers, associatedMedia: rendered.associatedMedia)
     }
     
+    public static func mediaSourcePeerId(for peerId: PeerId) -> PeerId {
+        if let state = MessageSimulationOverlay.current(for: peerId) {
+            return state.sourcePeerId
+        }
+        if let state = ProfileSpoofingOverlay.current(for: peerId) {
+            return state.targetPeerId
+        }
+        if let state = FriendSpoofingOverlay.current(for: peerId) {
+            return state.sourcePeerId
+        }
+        if let state = ChannelSpoofingOverlay.current(for: peerId) {
+            return state.sourceChannelId
+        }
+        return peerId
+    }
+    
+    public static func mediaPeer(for peer: Peer) -> Peer {
+        if let user = peer as? TelegramUser {
+            if let state = MessageSimulationOverlay.current(for: user.id) {
+                return state.sourceUser
+            }
+            if let state = ProfileSpoofingOverlay.current(for: user.id) {
+                return state.targetUser
+            }
+            if let state = FriendSpoofingOverlay.current(for: user.id) {
+                return state.sourceUser
+            }
+        }
+        if let channel = peer as? TelegramChannel, let state = ChannelSpoofingOverlay.current(for: channel.id) {
+            return state.sourceChannel
+        }
+        return peer
+    }
+    
+    public static func mediaPeerReference(for peer: EnginePeer) -> PeerReference? {
+        return PeerReference(self.mediaPeer(for: peer._asPeer()))
+    }
+    
     public static func applyCached(peerId: PeerId, data: CachedPeerData?) -> CachedPeerData? {
         guard let data else {
             return nil
