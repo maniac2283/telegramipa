@@ -241,7 +241,7 @@ public final class AccountStateManager {
             return self.isUpdatingValue.get()
         }
         
-        private let notificationMessagesPipe = ValuePipe<[([Message], PeerGroupId, Bool, MessageHistoryThreadData?)]>()
+        fileprivate let notificationMessagesPipe = ValuePipe<[([Message], PeerGroupId, Bool, MessageHistoryThreadData?)]>()
         public var notificationMessages: Signal<[([Message], PeerGroupId, Bool, MessageHistoryThreadData?)], NoError> {
             return self.notificationMessagesPipe.signal()
         }
