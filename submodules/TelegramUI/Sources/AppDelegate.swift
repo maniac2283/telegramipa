@@ -641,9 +641,19 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             isICloudEnabled: buildConfig.isICloudEnabled
         )
         
-        guard let appGroupUrl = maybeAppGroupUrl else {
-            self.mainWindow?.presentNative(UIAlertController(title: nil, message: "Error 2", preferredStyle: .alert))
-            return true
+        let appGroupUrl: URL
+        if let existing = maybeAppGroupUrl {
+            appGroupUrl = existing
+        } else {
+            let fallback = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("telegram-data", isDirectory: true)
+            do {
+                try FileManager.default.createDirectory(at: fallback, withIntermediateDirectories: true, attributes: nil)
+            } catch {
+                self.mainWindow?.presentNative(UIAlertController(title: nil, message: "Error 2", preferredStyle: .alert))
+                return true
+            }
+            appGroupUrl = fallback
         }
         
         var isDebugConfiguration = false
