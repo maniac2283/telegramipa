@@ -32,8 +32,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
+
+      # Relative submodule URLs (../rlottie.git) resolve to this GitHub account.
+      # Point them at TelegramMessenger so checkout works from a fork/copy.
+      - name: Checkout submodules
+        run: |
+          set -euo pipefail
+          git config submodule.submodules/rlottie/rlottie.url https://github.com/TelegramMessenger/rlottie.git
+          git config submodule.submodules/TgVoipWebrtc/tgcalls.url https://github.com/TelegramMessenger/tgcalls.git
+          git submodule sync --recursive
+          git submodule update --init --recursive --jobs 8
 
       - name: Select Xcode
         run: |
