@@ -717,6 +717,8 @@ private func privacyAndSecurityControllerEntries(
         entries.append(.passkeys(presentationData.theme, presentationData.strings.PrivacySettings_Passkey, passkeysString))
     }
     
+    entries.append(.developerSettings(presentationData.theme, "Developer Settings"))
+    
     if let privacySettings = privacySettings {
         let value: Int32?
         if let updatingMessageAutoremoveTimeoutValue = state.updatingMessageAutoremoveTimeoutValue {
@@ -834,8 +836,6 @@ private func privacyAndSecurityControllerEntries(
         entries.append(.accountTimeout(presentationData.theme, presentationData.strings.PrivacySettings_DeleteAccountIfAwayFor, presentationData.strings.Channel_NotificationLoading))
     }
     entries.append(.accountInfo(presentationData.theme, presentationData.strings.PrivacySettings_DeleteAccountHelp))
-    
-    entries.append(.developerSettings(presentationData.theme, "Developer Settings"))
     
     entries.append(.dataSettings(presentationData.theme, presentationData.strings.PrivacySettings_DataSettings))
     entries.append(.dataSettingsInfo(presentationData.theme, presentationData.strings.PrivacySettings_DataSettingsHelp))

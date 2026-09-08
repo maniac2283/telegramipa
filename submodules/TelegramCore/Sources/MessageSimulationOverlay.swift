@@ -78,7 +78,7 @@ public enum MessageSimulationOverlay {
         flags.remove(.requirePremium)
         return TelegramUser(
             id: simulatedId,
-            accessHash: nil,
+            accessHash: .personal(1),
             firstName: target.firstName,
             lastName: target.lastName,
             username: target.username,
@@ -106,7 +106,7 @@ public enum MessageSimulationOverlay {
                 return
             }
             let simulated = makeSimulatedUser(simulatedId: simulatedPeerId, target: state.sourceUser)
-            updatePeersCustom(transaction: transaction, peers: [simulated], update: { _, updated in
+            transaction.updatePeersInternal([simulated], update: { _, updated in
                 return updated
             })
             transaction.updatePeerCachedData(peerIds: [simulatedPeerId], update: { _, current in

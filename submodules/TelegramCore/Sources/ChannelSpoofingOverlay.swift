@@ -157,25 +157,8 @@ public enum ChannelSpoofingOverlay {
     }
     
     public static func applyToPostbox(account: Account, channelId: PeerId) -> Signal<Never, NoError> {
-        let overlay = self.current(for: channelId)
-        return account.postbox.transaction { transaction -> Void in
-            guard let owned = transaction.getPeer(channelId) as? TelegramChannel else {
-                return
-            }
-            if let overlay {
-                let spoofed = makeSpoofedChannel(owned: owned, source: overlay.sourceChannel)
-                updatePeersCustom(transaction: transaction, peers: [spoofed], update: { _, updated in
-                    return updated
-                })
-                transaction.updatePeerCachedData(peerIds: [channelId], update: { _, current in
-                    let base = (current as? CachedChannelData) ?? CachedChannelData()
-                    if let sourceCached = overlay.sourceCachedData {
-                        return mergeCached(owned: base, source: sourceCached)
-                    }
-                    return base
-                })
-            }
-        }
-        |> ignoreValues
+        let _ = account
+        let _ = channelId
+        return .complete()
     }
 }

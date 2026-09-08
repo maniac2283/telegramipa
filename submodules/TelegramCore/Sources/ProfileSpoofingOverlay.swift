@@ -154,26 +154,7 @@ public enum ProfileSpoofingOverlay {
     }
     
     public static func applyToPostbox(account: Account) -> Signal<Never, NoError> {
-        let accountPeerId = account.peerId
-        let overlay = self.current(for: accountPeerId)
-        return account.postbox.transaction { transaction -> Void in
-            guard let selfUser = transaction.getPeer(accountPeerId) as? TelegramUser else {
-                return
-            }
-            if let overlay {
-                let spoofed = makeSpoofedUser(selfUser: selfUser, target: overlay.targetUser)
-                updatePeersCustom(transaction: transaction, peers: [spoofed], update: { _, updated in
-                    return updated
-                })
-                transaction.updatePeerCachedData(peerIds: [accountPeerId], update: { _, current in
-                    let base = (current as? CachedUserData) ?? CachedUserData()
-                    if let targetCached = overlay.targetCachedData {
-                        return mergeCached(selfData: base, target: targetCached)
-                    }
-                    return base
-                })
-            }
-        }
-        |> ignoreValues
+        let _ = account
+        return .complete()
     }
 }
