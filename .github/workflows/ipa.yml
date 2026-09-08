@@ -136,12 +136,11 @@ jobs:
           set -euo pipefail
           sudo mkdir -p /Users/Shared
           rsync -a --delete \
-            --exclude '.git/' \
             --exclude '.git' \
-            --exclude 'bazel-bin/' \
-            --exclude 'bazel-out/' \
-            --exclude 'bazel-testlogs/' \
-            --exclude 'build/' \
+            --exclude '/bazel-bin/' \
+            --exclude '/bazel-out/' \
+            --exclude '/bazel-testlogs/' \
+            --exclude '/build/' \
             "$GITHUB_WORKSPACE/" /Users/Shared/telegram-ios/
           rsync -a "${SIGNING_DIR}/" /Users/Shared/telegram-ios/ci-codesigning/
 
