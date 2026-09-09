@@ -1011,8 +1011,6 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
         tonState = .single(nil)
     }
     
-    let profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: PeerDisplayOverlay.mediaSourcePeerId(for: peerId))
-    
     let businessConnectedBot = context.engine.data.subscribe(
         TelegramEngine.EngineData.Item.Peer.BusinessConnectedBot(id: context.account.peerId)
     )
@@ -1026,6 +1024,12 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
         }
         return context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: botPeerId))
     }
+    
+    return PeerDisplayOverlay.updated
+    |> mapToSignal { _ -> Signal<PeerInfoScreenData, NoError> in
+    let mediaSourcePeerId = PeerDisplayOverlay.mediaSourcePeerId(for: peerId)
+    let profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: mediaSourcePeerId)
+    let savedMusicContext = ProfileSavedMusicContext(account: context.account, peerId: mediaSourcePeerId)
     
     return combineLatest(
         context.account.viewTracker.peerView(peerId, updateData: true),
@@ -1053,9 +1057,11 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
         peerInfoPersonalOrLinkedChannel(context: context, peerId: peerId, isSettings: true),
         starsState,
         tonState,
-        businessConnectedBot
+        businessConnectedBot,
+        profileGiftsContext.state,
+        savedMusicContext.state
     )
-    |> map { peerView, accountsAndPeers, accountSessions, privacySettings, sharedPreferences, notifications, stickerPacks, hasPassport, accountPreferences, suggestions, limits, hasPassword, isPowerSavingEnabled, hasStories, bots, personalChannel, starsState, tonState, businessConnectedBot -> PeerInfoScreenData in
+    |> map { peerView, accountsAndPeers, accountSessions, privacySettings, sharedPreferences, notifications, stickerPacks, hasPassport, accountPreferences, suggestions, limits, hasPassword, isPowerSavingEnabled, hasStories, bots, personalChannel, starsState, tonState, businessConnectedBot, _, savedMusicState -> PeerInfoScreenData in
         let (notificationExceptions, notificationsAuthorizationStatus, notificationsWarningSuppressed) = notifications
         let (featuredStickerPacks, archivedStickerPacks) = stickerPacks
         
@@ -1144,15 +1150,13 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
             profileGiftsCollectionsContext: nil,
             premiumGiftOptions: [],
             webAppPermissions: nil,
-            savedMusicContext: nil,
-            savedMusicState: nil,
+            savedMusicContext: savedMusicContext,
+            savedMusicState: savedMusicState,
             managedByBot: nil,
             businessConnectedBot: businessConnectedBot
         )
     }
-    |> mapToSignal { data -> Signal<PeerInfoScreenData, NoError> in
-        return PeerDisplayOverlay.updated
-        |> map { _ in overlayPeerInfoScreenData(data) }
+    |> map { overlayPeerInfoScreenData($0) }
     }
 }
 
@@ -1559,7 +1563,7 @@ func peerInfoScreenData(
                 webAppPermissions = .single(nil)
             }
                                     
-            let savedMusicContext = ProfileSavedMusicContext(account: context.account, peerId: peerId)
+            let savedMusicContext = ProfileSavedMusicContext(account: context.account, peerId: PeerDisplayOverlay.mediaSourcePeerId(for: peerId))
                
             let businessConnectedBot: Signal<EnginePeer?, NoError>
             if isMyProfile {
@@ -1578,6 +1582,13 @@ func peerInfoScreenData(
                 }
             } else {
                 businessConnectedBot = .single(nil)
+            }
+            
+            let profileGiftsState: Signal<ProfileGiftsContext.State?, NoError>
+            if let profileGiftsContext {
+                profileGiftsState = profileGiftsContext.state |> map { Optional($0) }
+            } else {
+                profileGiftsState = .single(nil)
             }
             
             let forcedLinkedCommunityId = Atomic<PeerId?>(value: nil)
@@ -1604,16 +1615,17 @@ func peerInfoScreenData(
                 premiumGiftOptions,
                 webAppPermissions,
                 savedMusicContext.state,
-                businessConnectedBot
+                businessConnectedBot,
+                profileGiftsState
             )
-            |> mapToSignal { peerView, availablePanes, globalNotificationSettings, encryptionKeyFingerprint, status, hasStories, hasStoryArchive, recommendedBots, accountIsPremium, savedMessagesPeer, hasSavedMessagesChats, hasSavedMessages, hasSavedMessageTags, hasBotPreviewItems, personalChannel, privacySettings, starsRevenueContextAndState, revenueContextAndState, premiumGiftOptions, webAppPermissions, savedMusicState, businessConnectedBot -> Signal<PeerInfoScreenData, NoError> in
+            |> mapToSignal { peerView, availablePanes, globalNotificationSettings, encryptionKeyFingerprint, status, hasStories, hasStoryArchive, recommendedBots, accountIsPremium, savedMessagesPeer, hasSavedMessagesChats, hasSavedMessages, hasSavedMessageTags, hasBotPreviewItems, personalChannel, privacySettings, starsRevenueContextAndState, revenueContextAndState, premiumGiftOptions, webAppPermissions, savedMusicState, businessConnectedBot, profileGiftsState -> Signal<PeerInfoScreenData, NoError> in
                 var availablePanes = availablePanes
                 if isMyProfile {
                     availablePanes?.insert(.stories, at: 0)
                     if availablePanes != nil, profileGiftsContext != nil {
                         let overlayCached = PeerDisplayOverlay.applyCached(peerId: peerView.peerId, data: peerView.cachedData) as? CachedUserData
                         let giftCount = overlayCached?.starGiftsCount ?? (peerView.cachedData as? CachedUserData)?.starGiftsCount
-                        if (giftCount ?? 0) > 0 || PeerDisplayOverlay.mediaSourcePeerId(for: peerView.peerId) != peerView.peerId {
+                        if (giftCount ?? 0) > 0 || (profileGiftsState?.count ?? 0) > 0 || !(profileGiftsState?.gifts.isEmpty ?? true) || PeerDisplayOverlay.mediaSourcePeerId(for: peerView.peerId) != peerView.peerId {
                             availablePanes?.insert(.gifts, at: 1)
                         }
                     }
@@ -1628,7 +1640,7 @@ func peerInfoScreenData(
                     if availablePanes != nil, profileGiftsContext != nil, peerView.peerId != context.account.peerId {
                         let overlayCached = PeerDisplayOverlay.applyCached(peerId: peerView.peerId, data: peerView.cachedData) as? CachedUserData
                         let giftCount = overlayCached?.starGiftsCount ?? (peerView.cachedData as? CachedUserData)?.starGiftsCount
-                        if (giftCount ?? 0) > 0 || PeerDisplayOverlay.mediaSourcePeerId(for: peerView.peerId) != peerView.peerId {
+                        if (giftCount ?? 0) > 0 || (profileGiftsState?.count ?? 0) > 0 || !(profileGiftsState?.gifts.isEmpty ?? true) || PeerDisplayOverlay.mediaSourcePeerId(for: peerView.peerId) != peerView.peerId {
                             availablePanes?.insert(.gifts, at: hasStories ? 1 : 0)
                         }
                     }

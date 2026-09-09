@@ -576,11 +576,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         }
         
         var currentSavedMusic: TelegramMediaFile?
-        if let peer, peer.id != self.context.account.peerId || self.isMyProfile, let screenData {
-            if let savedMusicState = screenData.savedMusicState {
-                currentSavedMusic = savedMusicState.files.first
-            } else if let cachedUserData = screenData.cachedData as? CachedUserData {
-                currentSavedMusic = cachedUserData.savedMusic
+        if let peer, let screenData {
+            let isSpoofedMusic = PeerDisplayOverlay.mediaSourcePeerId(for: peer.id) != peer.id
+            if peer.id != self.context.account.peerId || self.isMyProfile || (self.isSettings && isSpoofedMusic) {
+                if let first = screenData.savedMusicState?.files.first {
+                    currentSavedMusic = first
+                } else if let cachedUserData = screenData.cachedData as? CachedUserData {
+                    currentSavedMusic = cachedUserData.savedMusic
+                }
             }
         }
         let musicHeight: CGFloat = hasBackground || self.isAvatarExpanded ? 24.0 : 16.0

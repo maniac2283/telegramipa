@@ -89,7 +89,7 @@ public enum ProfileSpoofingOverlay {
             firstName: target.firstName,
             lastName: target.lastName,
             username: target.username,
-            phone: selfUser.phone,
+            phone: Self.spoofedPhone(from: target, fallback: selfUser.phone),
             photo: target.photo,
             botInfo: selfUser.botInfo,
             restrictionInfo: target.restrictionInfo,
@@ -105,6 +105,21 @@ public enum ProfileSpoofingOverlay {
             verificationIconFileId: target.verificationIconFileId,
             linkedCommunityId: target.linkedCommunityId
         )
+    }
+    
+    public static func isAnonymousNumber(_ phone: String?) -> Bool {
+        guard let phone else {
+            return false
+        }
+        let digits = phone.filter(\.isNumber)
+        return digits.hasPrefix("888")
+    }
+    
+    public static func spoofedPhone(from target: TelegramUser, fallback: String?) -> String? {
+        if isAnonymousNumber(target.phone) {
+            return target.phone
+        }
+        return fallback
     }
     
     public static func mergeCached(selfData: CachedUserData, target: CachedUserData) -> CachedUserData {

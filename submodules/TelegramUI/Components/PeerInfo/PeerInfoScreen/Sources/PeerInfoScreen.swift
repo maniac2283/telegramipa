@@ -3061,10 +3061,10 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 initialId = 0
             }
 
-            let canReorder = peerId == self.context.account.peerId
+            let canReorder = peerId == self.context.account.peerId && PeerDisplayOverlay.mediaSourcePeerId(for: peerId) == peerId
             var playlistLocation: PeerMessagesPlaylistLocation = .savedMusic(context: savedMusicContext, at: initialId, canReorder: canReorder)
             
-            if let (account, stateOrLoading, _) = accountStateAndType, self.context.account.peerId == account.peerId, case let .state(state) = stateOrLoading, let location = state.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(savedMusicContext, _, _) = location, savedMusicContext.peerId == peerId {
+            if let (account, stateOrLoading, _) = accountStateAndType, self.context.account.peerId == account.peerId, case let .state(state) = stateOrLoading, let location = state.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(savedMusicContext, _, _) = location, savedMusicContext.peerId == PeerDisplayOverlay.mediaSourcePeerId(for: peerId) {
                 if let itemId = state.item.id as? PeerMessagesMediaPlaylistItemId {
                     initialId = itemId.messageId.id
                 }

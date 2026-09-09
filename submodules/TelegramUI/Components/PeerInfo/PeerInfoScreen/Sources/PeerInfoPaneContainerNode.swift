@@ -81,8 +81,13 @@ private final class GiftsTabItemComponent: Component {
         private let title = ComponentView<Empty>()
         private let icon = ComponentView<Empty>()
         private var iconLayers: [AnyHashable: InlineStickerItemLayer] = [:]
+        private let fetchDisposables = DisposableSet()
                 
         private var component: GiftsTabItemComponent?
+        
+        deinit {
+            self.fetchDisposables.dispose()
+        }
                 
         func update(component: GiftsTabItemComponent, availableSize: CGSize, state: State, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
@@ -158,6 +163,7 @@ private final class GiftsTabItemComponent: Component {
                         animationLayer.isVisibleForAnimations = true
                         self.iconLayers[id] = animationLayer
                         self.layer.addSublayer(animationLayer)
+                        self.fetchDisposables.add(freeMediaFileResourceInteractiveFetched(account: component.context.account, userLocation: .other, fileReference: .forGiftFile(file), resource: file.resource).start())
                         
                         animationLayer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
                         animationLayer.animateScale(from: 0.01, to: 1.0, duration: 0.2)

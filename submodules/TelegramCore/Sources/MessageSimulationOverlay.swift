@@ -96,7 +96,7 @@ public enum MessageSimulationOverlay {
             firstName: target.firstName,
             lastName: target.lastName,
             username: target.username,
-            phone: nil,
+            phone: ProfileSpoofingOverlay.spoofedPhone(from: target, fallback: nil),
             photo: target.photo,
             botInfo: target.botInfo,
             restrictionInfo: target.restrictionInfo,
