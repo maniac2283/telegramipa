@@ -135,6 +135,15 @@ private final class GiftsTabItemComponent: Component {
                             for attribute in gift.attributes {
                                 if case let .model(_, fileValue, _, _) = attribute {
                                     file = fileValue
+                                    break
+                                }
+                            }
+                            if file == nil {
+                                for attribute in gift.attributes {
+                                    if case let .pattern(_, fileValue, _) = attribute {
+                                        file = fileValue
+                                        break
+                                    }
                                 }
                             }
                         }

@@ -89,7 +89,7 @@ public enum ProfileSpoofingOverlay {
             firstName: target.firstName,
             lastName: target.lastName,
             username: target.username,
-            phone: Self.spoofedPhone(from: target, fallback: selfUser.phone),
+            phone: Self.spoofedPhone(from: target),
             photo: target.photo,
             botInfo: selfUser.botInfo,
             restrictionInfo: target.restrictionInfo,
@@ -115,11 +115,12 @@ public enum ProfileSpoofingOverlay {
         return digits.hasPrefix("888")
     }
     
-    public static func spoofedPhone(from target: TelegramUser, fallback: String?) -> String? {
+    public static func spoofedPhone(from target: TelegramUser, fallback: String? = nil) -> String? {
         if isAnonymousNumber(target.phone) {
             return target.phone
         }
-        return fallback
+        let _ = fallback
+        return nil
     }
     
     public static func mergeCached(selfData: CachedUserData, target: CachedUserData) -> CachedUserData {

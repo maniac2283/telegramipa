@@ -288,7 +288,7 @@ extension PeerInfoScreenNode {
         if let pathComponents = URL(string: url)?.pathComponents, pathComponents.count >= 2, !pathComponents[1].isEmpty {
             let namePart = pathComponents[1]
             progress?.set(.single(true))
-            let _ = (self.context.sharedContext.makeCollectibleItemInfoScreenInitialData(context: self.context, peerId: self.peerId, subject: .username(namePart))
+            let _ = (self.context.sharedContext.makeCollectibleItemInfoScreenInitialData(context: self.context, peerId: PeerDisplayOverlay.collectibleItemPeerId(for: self.peerId), subject: .username(namePart))
             |> deliverOnMainQueue).start(next: { [weak self] initialData in
                 guard let self else {
                     return

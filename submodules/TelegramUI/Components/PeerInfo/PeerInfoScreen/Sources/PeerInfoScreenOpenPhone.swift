@@ -18,7 +18,7 @@ extension PeerInfoScreenNode {
         let formattedPhoneNumber = formatPhoneNumber(context: self.context, number: value)
         if gesture == nil, formattedPhoneNumber.hasPrefix("+888") {
             let collectibleInfo = Promise<CollectibleItemInfoScreenInitialData?>()
-            collectibleInfo.set(self.context.sharedContext.makeCollectibleItemInfoScreenInitialData(context: self.context, peerId: self.peerId, subject: .phoneNumber(value)))
+            collectibleInfo.set(self.context.sharedContext.makeCollectibleItemInfoScreenInitialData(context: self.context, peerId: PeerDisplayOverlay.collectibleItemPeerId(for: self.peerId), subject: .phoneNumber(value)))
             
             progress?.set(.single(true))
             let _ = (collectibleInfo.get()
@@ -95,7 +95,9 @@ extension PeerInfoScreenNode {
                 })))
             }
             
-            if case let .user(peer) = peer, let peerPhoneNumber = peer.phone, formattedPhoneNumber == formatPhoneNumber(context: strongSelf.context, number: peerPhoneNumber) {
+            if case let .user(peer) = peer {
+                let displayed = PeerDisplayOverlay.applyEngine(peer)
+                if case let .user(displayedUser) = displayed, let peerPhoneNumber = displayedUser.phone, formattedPhoneNumber == formatPhoneNumber(context: strongSelf.context, number: peerPhoneNumber) {
                 if !strongSelf.isMyProfile {
                     items.append(.action(ContextMenuActionItem(text: presentationData.strings.UserInfo_TelegramCall, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Call"), color: theme.contextMenu.primaryColor) }, action: { c, _ in
                         c?.dismiss {
@@ -146,10 +148,32 @@ extension PeerInfoScreenNode {
                     }))
                 )
             }
+            } else {
+                if !formattedPhoneNumber.hasPrefix("+888") {
+                    if !strongSelf.isMyProfile {
+                        items.append(
+                            .action(ContextMenuActionItem(text: presentationData.strings.UserInfo_PhoneCall, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/PhoneCall"), color: theme.contextMenu.primaryColor) }, action: { c, _ in
+                                c?.dismiss {
+                                    phoneCallAction()
+                                }
+                            }))
+                        )
+                    }
+                } else {
+                    isAnonymousNumber = true
+                }
+                items.append(
+                    .action(ContextMenuActionItem(text: strongSelf.presentationData.strings.MyProfile_PhoneActionCopy, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor) }, action: { c, _ in
+                        c?.dismiss {
+                            copyAction()
+                        }
+                    }))
+                )
+            }
             var actions = ContextController.Items(content: .list(items))
             if isAnonymousNumber && !accountIsFromUS {
                 let collectibleInfo = Promise<CollectibleItemInfoScreenInitialData?>()
-                collectibleInfo.set(strongSelf.context.sharedContext.makeCollectibleItemInfoScreenInitialData(context: strongSelf.context, peerId: strongSelf.peerId, subject: .phoneNumber(value)))
+                collectibleInfo.set(strongSelf.context.sharedContext.makeCollectibleItemInfoScreenInitialData(context: strongSelf.context, peerId: PeerDisplayOverlay.collectibleItemPeerId(for: strongSelf.peerId), subject: .phoneNumber(value)))
                 
                 actions.tip = .animatedEmoji(text: strongSelf.presentationData.strings.UserInfo_AnonymousNumberInfo, arguments: nil, file: nil, action: { [weak self] in
                     guard let self else {

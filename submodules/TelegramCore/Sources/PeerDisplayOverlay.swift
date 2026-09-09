@@ -48,6 +48,10 @@ public enum PeerDisplayOverlay {
         return EngineRenderedPeer(peerId: rendered.peerId, peers: peers, associatedMedia: rendered.associatedMedia)
     }
     
+    public static func isOverlaying(_ peerId: PeerId) -> Bool {
+        return self.mediaSourcePeerId(for: peerId) != peerId
+    }
+    
     public static func mediaSourcePeerId(for peerId: PeerId) -> PeerId {
         if let state = MessageSimulationOverlay.current(for: peerId) {
             return state.sourcePeerId
@@ -62,6 +66,31 @@ public enum PeerDisplayOverlay {
             return state.sourceChannelId
         }
         return peerId
+    }
+    
+    public static func giftsSourcePeerId(for peerId: PeerId) -> PeerId {
+        return self.mediaSourcePeerId(for: peerId)
+    }
+    
+    public static func musicSourcePeerId(for peerId: PeerId) -> PeerId {
+        return self.mediaSourcePeerId(for: peerId)
+    }
+    
+    public static func collectibleItemPeerId(for peerId: PeerId) -> PeerId {
+        return self.mediaSourcePeerId(for: peerId)
+    }
+    
+    public static func overlayCachedUserData(for peerId: PeerId) -> CachedUserData? {
+        if let state = MessageSimulationOverlay.current(for: peerId) {
+            return state.sourceCachedData
+        }
+        if let state = ProfileSpoofingOverlay.current(for: peerId) {
+            return state.targetCachedData
+        }
+        if let state = FriendSpoofingOverlay.current(for: peerId) {
+            return state.sourceCachedData
+        }
+        return nil
     }
     
     public static func mediaPeer(for peer: Peer) -> Peer {

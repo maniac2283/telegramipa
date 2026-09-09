@@ -9,6 +9,9 @@ final class ProfileSpoofingManager {
     private let context: AccountContext
     private let disposable = DisposableSet()
     private let sourceHistoryDisposable = MetaDisposable()
+    private let overlayContentDisposable = MetaDisposable()
+    private var overlayGiftsContext: ProfileGiftsContext?
+    private var overlayMusicContext: ProfileSavedMusicContext?
     private var lastOwnedChannelId: PeerId?
     
     init(context: AccountContext) {
@@ -95,9 +98,10 @@ final class ProfileSpoofingManager {
             }
             return true
         })
-        |> mapToSignal { state -> Signal<Never, NoError> in
+        |> mapToSignal { [weak self] state -> Signal<Never, NoError> in
             let previous = ProfileSpoofingOverlay.current(for: accountPeerId)
             ProfileSpoofingOverlay.set(state, for: accountPeerId, persist: state != nil)
+            self?.applyOverlayProfileContent(sourceId: state?.targetPeerId)
             if let state, previous?.targetPeerId != state.targetPeerId {
                 let storedId = state.targetPeerId.toInt64()
                 let _ = updateProfileSpoofingSettings(engine: engine, { current in
@@ -232,9 +236,57 @@ final class ProfileSpoofingManager {
     deinit {
         self.disposable.dispose()
         self.sourceHistoryDisposable.dispose()
+        self.overlayContentDisposable.dispose()
         ProfileSpoofingOverlay.set(nil, for: self.context.account.peerId, persist: false)
         if let lastOwnedChannelId = self.lastOwnedChannelId {
             ChannelSpoofingOverlay.set(nil, for: lastOwnedChannelId, persist: false)
+        }
+    }
+    
+    private func applyOverlayProfileContent(sourceId: PeerId?) {
+        guard let sourceId else {
+            self.overlayGiftsContext = nil
+            self.overlayMusicContext = nil
+            self.overlayContentDisposable.set(nil)
+            return
+        }
+        self.context.account.viewTracker.forceUpdateCachedPeerData(peerId: sourceId)
+        let gifts = ProfileGiftsContext(account: self.context.account, peerId: sourceId, filter: ProfileGiftsContext.Filters.All.subtracting(.hidden), limit: 8)
+        let music = ProfileSavedMusicContext(account: self.context.account, peerId: sourceId)
+        self.overlayGiftsContext = gifts
+        self.overlayMusicContext = music
+        self.overlayContentDisposable.set((combineLatest(gifts.state, music.state)
+        |> deliverOnMainQueue).start(next: { [weak self] giftState, _ in
+            self?.prefetchGiftArtwork(giftState.gifts)
+        }))
+    }
+    
+    private func prefetchGiftArtwork(_ gifts: [ProfileGiftsContext.State.StarGift]) {
+        for gift in gifts.prefix(6) {
+            var files: [TelegramMediaFile] = []
+            switch gift.gift {
+            case let .generic(generic):
+                files.append(generic.file)
+            case let .unique(unique):
+                for attribute in unique.attributes {
+                    switch attribute {
+                    case let .model(_, file, _, _):
+                        files.append(file)
+                    case let .pattern(_, file, _):
+                        files.append(file)
+                    default:
+                        break
+                    }
+                }
+            }
+            for file in files {
+                let _ = fetchedMediaResource(
+                    mediaBox: self.context.account.postbox.mediaBox,
+                    userLocation: .other,
+                    userContentType: .sticker,
+                    reference: FileMediaReference.forGiftFile(file).resourceReference(file.resource)
+                ).start()
+            }
         }
     }
     

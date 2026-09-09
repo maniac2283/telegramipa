@@ -558,11 +558,18 @@ final class PeerInfoScreenData {
 
 private func overlayPeerInfoScreenData(_ data: PeerInfoScreenData) -> PeerInfoScreenData {
     let overlayPeerId = data.peer?.id ?? data.chatPeer?.id
+    let overlaidCached = overlayPeerId.flatMap { PeerDisplayOverlay.applyCached(peerId: $0, data: data.cachedData) } ?? data.cachedData
+    
+    var savedMusicState = data.savedMusicState
+    if let overlayPeerId, (savedMusicState?.files.isEmpty ?? true), let file = (overlaidCached as? CachedUserData)?.savedMusic ?? PeerDisplayOverlay.overlayCachedUserData(for: overlayPeerId)?.savedMusic {
+        savedMusicState = ProfileSavedMusicContext.State(files: [file], count: 1, dataState: .ready(canLoadMore: true))
+    }
+    
     let result = PeerInfoScreenData(
         peer: data.peer.flatMap { PeerDisplayOverlay.applyEngine($0) },
         chatPeer: data.chatPeer.flatMap { PeerDisplayOverlay.applyEngine($0) },
         savedMessagesPeer: data.savedMessagesPeer,
-        cachedData: overlayPeerId.flatMap { PeerDisplayOverlay.applyCached(peerId: $0, data: data.cachedData) } ?? data.cachedData,
+        cachedData: overlaidCached,
         status: data.status,
         peerNotificationSettings: data.peerNotificationSettings,
         threadNotificationSettings: data.threadNotificationSettings,
@@ -601,7 +608,7 @@ private func overlayPeerInfoScreenData(_ data: PeerInfoScreenData) -> PeerInfoSc
         premiumGiftOptions: data.premiumGiftOptions,
         webAppPermissions: data.webAppPermissions,
         savedMusicContext: data.savedMusicContext,
-        savedMusicState: data.savedMusicState,
+        savedMusicState: savedMusicState,
         managedByBot: data.managedByBot,
         businessConnectedBot: data.businessConnectedBot
     )
@@ -1027,9 +1034,8 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
     
     return PeerDisplayOverlay.updated
     |> mapToSignal { _ -> Signal<PeerInfoScreenData, NoError> in
-    let mediaSourcePeerId = PeerDisplayOverlay.mediaSourcePeerId(for: peerId)
-    let profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: mediaSourcePeerId)
-    let savedMusicContext = ProfileSavedMusicContext(account: context.account, peerId: mediaSourcePeerId)
+    let profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: PeerDisplayOverlay.giftsSourcePeerId(for: peerId))
+    let savedMusicContext = ProfileSavedMusicContext(account: context.account, peerId: PeerDisplayOverlay.musicSourcePeerId(for: peerId))
     
     return combineLatest(
         context.account.viewTracker.peerView(peerId, updateData: true),
@@ -1245,7 +1251,7 @@ func peerInfoScreenData(
             let profileGiftsContext: ProfileGiftsContext?
             let profileGiftsCollectionsContext: ProfileGiftsCollectionsContext?
             if case .user = kind {
-                let giftsPeerId = PeerDisplayOverlay.mediaSourcePeerId(for: userPeerId)
+                let giftsPeerId = PeerDisplayOverlay.giftsSourcePeerId(for: userPeerId)
                 if isMyProfile || userPeerId != context.account.peerId {
                     if giftsPeerId != userPeerId {
                         profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: giftsPeerId, filter: ProfileGiftsContext.Filters.All.subtracting(.hidden))
@@ -1563,7 +1569,7 @@ func peerInfoScreenData(
                 webAppPermissions = .single(nil)
             }
                                     
-            let savedMusicContext = ProfileSavedMusicContext(account: context.account, peerId: PeerDisplayOverlay.mediaSourcePeerId(for: peerId))
+            let savedMusicContext = ProfileSavedMusicContext(account: context.account, peerId: PeerDisplayOverlay.musicSourcePeerId(for: peerId))
                
             let businessConnectedBot: Signal<EnginePeer?, NoError>
             if isMyProfile {

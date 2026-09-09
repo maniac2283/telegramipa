@@ -134,6 +134,9 @@ final class FriendSpoofingManager {
         if lhs.sourceCachedData?.personalChannel != rhs.sourceCachedData?.personalChannel {
             return false
         }
+        if lhs.sourceCachedData?.savedMusic != rhs.sourceCachedData?.savedMusic {
+            return false
+        }
         return true
     }
     
