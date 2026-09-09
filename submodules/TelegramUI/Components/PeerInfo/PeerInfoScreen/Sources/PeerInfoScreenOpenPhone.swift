@@ -96,7 +96,7 @@ extension PeerInfoScreenNode {
             }
             
             if case let .user(peer) = peer {
-                let displayed = PeerDisplayOverlay.applyEngine(peer)
+                let displayed = PeerDisplayOverlay.applyEngine(EnginePeer(peer))
                 if case let .user(displayedUser) = displayed, let peerPhoneNumber = displayedUser.phone, formattedPhoneNumber == formatPhoneNumber(context: strongSelf.context, number: peerPhoneNumber) {
                 if !strongSelf.isMyProfile {
                     items.append(.action(ContextMenuActionItem(text: presentationData.strings.UserInfo_TelegramCall, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Call"), color: theme.contextMenu.primaryColor) }, action: { c, _ in

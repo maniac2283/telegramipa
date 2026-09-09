@@ -291,6 +291,12 @@ public final class ProfileSavedMusicContext {
         public var files: [TelegramMediaFile]
         public var count: Int32?
         public var dataState: DataState
+        
+        public init(files: [TelegramMediaFile], count: Int32?, dataState: DataState) {
+            self.files = files
+            self.count = count
+            self.dataState = dataState
+        }
     }
     
     private let queue: Queue = .mainQueue()
