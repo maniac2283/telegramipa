@@ -5,6 +5,8 @@ enum DeveloperFeaturePersistence {
     static let profileKey = "telegram.developer.profileSpoofingSettings.v1"
     static let friendKey = "telegram.developer.friendSpoofingSettings.v1"
     static let simulationKey = "telegram.developer.messageSimulationSettings.v1"
+    static let manualKey = "telegram.developer.manualProfileSettings.v1"
+    static let manualPhotoKey = "telegram.developer.manualProfile.photoData.v1"
     
     static func save<T: Encodable>(_ value: T, key: String) {
         guard let data = try? JSONEncoder().encode(value) else {
@@ -27,5 +29,19 @@ enum DeveloperFeaturePersistence {
             return value
         }
         return load(T.self, key: key) ?? empty
+    }
+    
+    static func savePhoto(_ data: Data) {
+        UserDefaults.standard.set(data, forKey: self.manualPhotoKey)
+        UserDefaults.standard.synchronize()
+    }
+    
+    static func loadPhoto() -> Data? {
+        return UserDefaults.standard.data(forKey: self.manualPhotoKey)
+    }
+    
+    static func clearPhoto() {
+        UserDefaults.standard.removeObject(forKey: self.manualPhotoKey)
+        UserDefaults.standard.synchronize()
     }
 }

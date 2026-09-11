@@ -19,6 +19,7 @@ public final class MessageSimulationOverlayState {
 public enum MessageSimulationOverlay {
     private static let lock = NSLock()
     private static var states: [PeerId: MessageSimulationOverlayState] = [:]
+    private static let giftArtworkDisposable = DisposableSet()
     
     public static let syntheticIdBase: Int64 = 5_000_000_000_000
     
@@ -459,41 +460,17 @@ public enum MessageSimulationOverlay {
             }
             switch action.action {
             case let .starGift(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
-                files.append(contentsOf: self.animationFiles(for: gift))
+                files.append(contentsOf: gift.artworkFiles)
             case let .starGiftUnique(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
-                files.append(contentsOf: self.animationFiles(for: gift))
+                files.append(contentsOf: gift.artworkFiles)
             default:
                 break
             }
         }
-        for file in files {
-            let _ = fetchedMediaResource(
-                mediaBox: account.postbox.mediaBox,
-                userLocation: .other,
-                userContentType: .sticker,
-                reference: FileMediaReference.forGiftFile(file, message: message).resourceReference(file.resource)
-            ).start()
+        guard !files.isEmpty else {
+            return
         }
-    }
-    
-    private static func animationFiles(for gift: StarGift) -> [TelegramMediaFile] {
-        switch gift {
-        case let .generic(generic):
-            return [generic.file]
-        case let .unique(unique):
-            var files: [TelegramMediaFile] = []
-            for attribute in unique.attributes {
-                switch attribute {
-                case let .model(_, file, _, _):
-                    files.append(file)
-                case let .pattern(_, file, _):
-                    files.append(file)
-                default:
-                    break
-                }
-            }
-            return files
-        }
+        self.giftArtworkDisposable.add(prepareStarGiftArtwork(account: account, files: files))
     }
     
     public static func prepareLocalHistory(transaction: Transaction, peerId: PeerId) {

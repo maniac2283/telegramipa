@@ -8,6 +8,10 @@ import AccountContext
 final class MessageSimulationManager {
     private let context: AccountContext
     private let disposable = DisposableSet()
+    private let overlayContentDisposable = MetaDisposable()
+    private let giftArtworkDisposable = MetaDisposable()
+    private var overlayGiftsContext: ProfileGiftsContext?
+    private var overlayMusicContext: ProfileSavedMusicContext?
     private var lastSimulatedPeerId: PeerId?
     private var processedOutgoingIds = Set<MessageId>()
     private var inFlightOutgoingIds = Set<MessageId>()
@@ -70,12 +74,16 @@ final class MessageSimulationManager {
                 && lhs.sourceCachedData?.starGiftsCount == rhs.sourceCachedData?.starGiftsCount
                 && lhs.sourceCachedData?.verification == rhs.sourceCachedData?.verification
                 && lhs.sourceCachedData?.starRating == rhs.sourceCachedData?.starRating
+                && lhs.sourceCachedData?.pendingStarRating == rhs.sourceCachedData?.pendingStarRating
+                && lhs.sourceCachedData?.personalChannel == rhs.sourceCachedData?.personalChannel
+                && lhs.sourceCachedData?.savedMusic == rhs.sourceCachedData?.savedMusic
         })
         |> mapToSignal { [weak self] state -> Signal<Never, NoError> in
             if let previous = self?.lastSimulatedPeerId, previous != state?.simulatedPeerId {
                 MessageSimulationOverlay.set(nil, for: previous, persist: state != nil)
             }
             self?.lastSimulatedPeerId = state?.simulatedPeerId
+            self?.applyOverlayProfileContent(sourceId: state?.sourcePeerId)
             if let state {
                 MessageSimulationOverlay.set(state, for: state.simulatedPeerId)
                 let simulatedRaw = state.simulatedPeerId.toInt64()
@@ -106,9 +114,34 @@ final class MessageSimulationManager {
     
     deinit {
         self.disposable.dispose()
+        self.overlayContentDisposable.dispose()
+        self.giftArtworkDisposable.dispose()
         if let lastSimulatedPeerId = self.lastSimulatedPeerId {
             MessageSimulationOverlay.set(nil, for: lastSimulatedPeerId, persist: false)
         }
+    }
+    
+    private func applyOverlayProfileContent(sourceId: PeerId?) {
+        guard let sourceId else {
+            self.overlayGiftsContext = nil
+            self.overlayMusicContext = nil
+            self.overlayContentDisposable.set(nil)
+            self.giftArtworkDisposable.set(nil)
+            return
+        }
+        self.context.account.viewTracker.forceUpdateCachedPeerData(peerId: sourceId)
+        let gifts = ProfileGiftsContext(account: self.context.account, peerId: sourceId, filter: ProfileGiftsContext.Filters.All.subtracting(.hidden), limit: 8)
+        let music = ProfileSavedMusicContext(account: self.context.account, peerId: sourceId)
+        self.overlayGiftsContext = gifts
+        self.overlayMusicContext = music
+        self.overlayContentDisposable.set((combineLatest(gifts.state, music.state)
+        |> deliverOnMainQueue).start(next: { [weak self] giftState, _ in
+            self?.prefetchGiftArtwork(giftState.gifts)
+        }))
+    }
+    
+    private func prefetchGiftArtwork(_ gifts: [ProfileGiftsContext.State.StarGift]) {
+        self.giftArtworkDisposable.set(prepareStarGiftArtwork(account: self.context.account, gifts: gifts.prefix(8).map(\.gift)))
     }
     
     private func handleUnsent(_ ids: Set<MessageId>) {

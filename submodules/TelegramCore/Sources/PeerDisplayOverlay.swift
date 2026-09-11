@@ -28,6 +28,9 @@ public enum PeerDisplayOverlay {
             if let overlayUser = updated as? TelegramUser {
                 updated = FriendSpoofingOverlay.applyVisual(to: overlayUser)
             }
+            if let overlayUser = updated as? TelegramUser {
+                updated = ManualProfileOverlay.applyVisual(to: overlayUser)
+            }
             return updated
         }
         if let channel = peer as? TelegramChannel {
@@ -120,7 +123,7 @@ public enum PeerDisplayOverlay {
             return nil
         }
         if let userData = data as? CachedUserData {
-            return FriendSpoofingOverlay.applyCached(peerId: peerId, data: MessageSimulationOverlay.applyCached(peerId: peerId, data: ProfileSpoofingOverlay.applyCached(peerId: peerId, data: userData)))
+            return ManualProfileOverlay.applyCached(peerId: peerId, data: FriendSpoofingOverlay.applyCached(peerId: peerId, data: MessageSimulationOverlay.applyCached(peerId: peerId, data: ProfileSpoofingOverlay.applyCached(peerId: peerId, data: userData))))
         }
         if let channelData = data as? CachedChannelData {
             return ChannelSpoofingOverlay.applyCached(peerId: peerId, data: channelData)

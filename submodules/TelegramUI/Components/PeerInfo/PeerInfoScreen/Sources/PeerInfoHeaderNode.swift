@@ -2532,7 +2532,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 transition: ComponentTransition(transition),
                 component: AnyComponent(PeerInfoGiftsCoverComponent(
                     context: self.context,
-                    peerId: peer.id,
+                    peerId: PeerDisplayOverlay.mediaSourcePeerId(for: peer.id),
                     giftsContext: profileGiftsContext,
                     hasBackground: hasBackground,
                     avatarCenter: apparentAvatarFrame.center,

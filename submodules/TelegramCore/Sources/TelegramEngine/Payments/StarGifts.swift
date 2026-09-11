@@ -1069,6 +1069,32 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             )
         }
         
+        public func withOwner(_ owner: Owner?) -> UniqueGift {
+            return UniqueGift(
+                id: self.id,
+                giftId: self.giftId,
+                title: self.title,
+                number: self.number,
+                slug: self.slug,
+                owner: owner,
+                attributes: self.attributes,
+                availability: self.availability,
+                giftAddress: self.giftAddress,
+                resellAmounts: self.resellAmounts,
+                resellForTonOnly: self.resellForTonOnly,
+                releasedBy: self.releasedBy,
+                valueAmount: self.valueAmount,
+                valueCurrency: self.valueCurrency,
+                valueUsdAmount: self.valueUsdAmount,
+                flags: self.flags,
+                themePeerId: self.themePeerId,
+                peerColor: self.peerColor,
+                hostPeerId: self.hostPeerId,
+                minOfferStars: self.minOfferStars,
+                craftChancePermille: self.craftChancePermille
+            )
+        }
+        
         public func withThemePeerId(_ themePeerId: EnginePeer.Id?) -> UniqueGift {
             return UniqueGift(
                 id: self.id,
@@ -1429,6 +1455,10 @@ func _internal_convertStarGift(account: Account, reference: StarGiftReference) -
 }
 
 func _internal_updateStarGiftAddedToProfile(account: Account, reference: StarGiftReference, added: Bool) -> Signal<Never, NoError> {
+    if ManualProfileOverlay.isOverlayReference(reference, peerId: account.peerId), case let .slug(slug) = reference {
+        let _ = ManualProfileOverlay.setGiftSaved(slug: slug, savedToProfile: added, peerId: account.peerId)
+        return .complete()
+    }
     var flags: Int32 = 0
     if !added {
         flags |= (1 << 0)
@@ -1450,9 +1480,22 @@ func _internal_updateStarGiftAddedToProfile(account: Account, reference: StarGif
 }
 
 func _internal_updateStarGiftsPinnedToTop(account: Account, peerId: EnginePeer.Id, references: [StarGiftReference]) -> Signal<Never, NoError> {
+    let overlaySlugs = references.compactMap { reference -> String? in
+        guard ManualProfileOverlay.isOverlayReference(reference, peerId: account.peerId), case let .slug(slug) = reference else {
+            return nil
+        }
+        return slug
+    }
+    if !overlaySlugs.isEmpty {
+        ManualProfileOverlay.setPinnedSlugs(overlaySlugs, peerId: account.peerId)
+    }
+    let realReferences = references.filter { !ManualProfileOverlay.isOverlayReference($0, peerId: account.peerId) }
+    if realReferences.isEmpty {
+        return .complete()
+    }
     return account.postbox.transaction { transaction in
         let peer = transaction.getPeer(peerId)
-        let starGifts = references.compactMap { $0.apiStarGiftReference(transaction: transaction) }
+        let starGifts = realReferences.compactMap { $0.apiStarGiftReference(transaction: transaction) }
         return (peer, starGifts)
     }
     |> mapToSignal { peer, starGifts in
@@ -1844,10 +1887,12 @@ final class CachedProfileGifts: Codable {
     
     func render(transaction: Transaction) {
         for i in 0 ..< self.gifts.count {
-            let gift = self.gifts[i]
+            var gift = self.gifts[i]
             if gift.fromPeer == nil, let fromPeerId = gift._fromPeerId, let peer = transaction.getPeer(fromPeerId) {
-                self.gifts[i] = gift.withFromPeer(EnginePeer(peer))
+                gift = gift.withFromPeer(EnginePeer(peer))
             }
+            gift = gift.withGift(gift.gift.withRestoredArtwork(transaction: transaction))
+            self.gifts[i] = gift
         }
     }
 }
@@ -1874,6 +1919,7 @@ private final class ProfileGiftsContextImpl {
     private let disposable = MetaDisposable()
     private let cacheDisposable = MetaDisposable()
     private let actionDisposable = MetaDisposable()
+    private let overlayDisposable = MetaDisposable()
     
     private var sorting: ProfileGiftsContext.Sorting
     private var filter: ProfileGiftsContext.Filters
@@ -1913,12 +1959,17 @@ private final class ProfileGiftsContextImpl {
         self.limit = limit
         
         self.loadMore()
+        self.overlayDisposable.set((PeerDisplayOverlay.updated
+        |> deliverOn(queue)).startStrict(next: { [weak self] _ in
+            self?.pushState()
+        }))
     }
     
     deinit {
         self.disposable.dispose()
         self.cacheDisposable.dispose()
         self.actionDisposable.dispose()
+        self.overlayDisposable.dispose()
     }
     
     func reload() {
@@ -2062,7 +2113,9 @@ private final class ProfileGiftsContextImpl {
                             }
                         }
                         
-                        let gifts = apiGifts.compactMap { ProfileGiftsContext.State.StarGift(apiSavedStarGift: $0, peerId: peerId, transaction: transaction) }
+                        let gifts = apiGifts.compactMap { ProfileGiftsContext.State.StarGift(apiSavedStarGift: $0, peerId: peerId, transaction: transaction) }.map { gift in
+                            gift.withGift(gift.gift.withRestoredArtwork(transaction: transaction))
+                        }
                         return (gifts, count, nextOffset, notificationsEnabled)
                     }
                 }
@@ -2107,6 +2160,10 @@ private final class ProfileGiftsContextImpl {
     }
     
     func updateStarGiftAddedToProfile(reference: StarGiftReference, added: Bool) {
+        if ManualProfileOverlay.isOverlayReference(reference, peerId: self.account.peerId), case let .slug(slug) = reference {
+            let _ = ManualProfileOverlay.setGiftSaved(slug: slug, savedToProfile: added, peerId: self.account.peerId)
+            return
+        }
         self.actionDisposable.set(
             _internal_updateStarGiftAddedToProfile(account: self.account, reference: reference, added: added).startStrict()
         )
@@ -2147,6 +2204,10 @@ private final class ProfileGiftsContextImpl {
     }
     
     func updateStarGiftPinnedToTop(reference: StarGiftReference, pinnedToTop: Bool) {
+        if ManualProfileOverlay.isOverlayReference(reference, peerId: self.account.peerId), case let .slug(slug) = reference {
+            let _ = ManualProfileOverlay.setGiftPinned(slug: slug, pinnedToTop: pinnedToTop, peerId: self.account.peerId)
+            return
+        }
         var pinnedGifts = self.gifts.filter { $0.pinnedToTop }
         var saveToProfile = false
         if var gift = self.gifts.first(where: { $0.reference == reference }) {
@@ -2229,7 +2290,21 @@ private final class ProfileGiftsContextImpl {
     }
     
     public func updatePinnedToTopStarGifts(references: [StarGiftReference]) {
-        let existingGifts = Set(references)
+        let overlaySlugs = references.compactMap { reference -> String? in
+            guard ManualProfileOverlay.isOverlayReference(reference, peerId: self.account.peerId), case let .slug(slug) = reference else {
+                return nil
+            }
+            return slug
+        }
+        if !overlaySlugs.isEmpty {
+            ManualProfileOverlay.setPinnedSlugs(overlaySlugs, peerId: self.account.peerId)
+        }
+        let realReferences = references.filter { !ManualProfileOverlay.isOverlayReference($0, peerId: self.account.peerId) }
+        if realReferences.isEmpty {
+            self.pushState()
+            return
+        }
+        let existingGifts = Set(realReferences)
         var saveSignals: [Signal<Never, NoError>] = []
         let currentPinnedGifts = self.gifts.filter { gift in
             if let reference = gift.reference {
@@ -2256,7 +2331,7 @@ private final class ProfileGiftsContextImpl {
         }
         
         var pinnedGifts: [ProfileGiftsContext.State.StarGift] = []
-        for reference in references {
+        for reference in realReferences {
             if let gift = currentPinnedGifts.first(where: { $0.reference == reference }) {
                 pinnedGifts.append(gift)
             }
@@ -2280,6 +2355,10 @@ private final class ProfileGiftsContextImpl {
     }
     
     public func dropOriginalDetails(reference: StarGiftReference) -> Signal<Never, DropStarGiftOriginalDetailsError> {
+        if ManualProfileOverlay.isOverlayReference(reference, peerId: self.account.peerId) {
+            self.pushState()
+            return .complete()
+        }
         if let index = self.gifts.firstIndex(where: { $0.reference == reference }), case let .unique(uniqueGift) = self.gifts[index].gift {
             let updatedUniqueGift = uniqueGift.withAttributes(uniqueGift.attributes.filter { $0.attributeType != .originalInfo })
             self.gifts[index] = self.gifts[index].withGift(.unique(updatedUniqueGift))
@@ -2295,6 +2374,9 @@ private final class ProfileGiftsContextImpl {
     }
         
     func convertStarGift(reference: StarGiftReference) {
+        if ManualProfileOverlay.isOverlayReference(reference, peerId: self.account.peerId) {
+            return
+        }
         self.actionDisposable.set(
             _internal_convertStarGift(account: self.account, reference: reference).startStrict()
         )
@@ -2307,6 +2389,9 @@ private final class ProfileGiftsContextImpl {
     }
     
     func transferStarGift(prepaid: Bool, reference: StarGiftReference, peerId: EnginePeer.Id) -> Signal<Never, TransferStarGiftError> {
+        if ManualProfileOverlay.isOverlayReference(reference, peerId: self.account.peerId) {
+            return .complete()
+        }
         if let count = self.count {
             self.count = max(0, count - 1)
         }
@@ -2318,6 +2403,9 @@ private final class ProfileGiftsContextImpl {
     }
     
     func buyStarGift(slug: String, peerId: EnginePeer.Id, price: CurrencyAmount?) -> Signal<Never, BuyStarGiftError> {
+        if ManualProfileOverlay.containsGift(slug: slug, peerId: self.account.peerId) {
+            return .complete()
+        }
         var listingPrice: CurrencyAmount?
         if let gift = self.gifts.first(where: { gift in
             if case let .unique(uniqueGift) = gift.gift, uniqueGift.slug == slug {
@@ -2636,15 +2724,24 @@ private final class ProfileGiftsContextImpl {
     private func pushState() {
         let useMainData = (self.filter == .All && self.sorting == .date) || self.filteredCount == nil
         
-        let effectiveGifts = useMainData ? self.gifts : self.filteredGifts
-        let effectiveCount = useMainData ? self.count : self.filteredCount
+        let mergedGifts = ManualProfileOverlay.mergeProfileGifts(self.gifts, peerId: self.peerId, accountPeerId: self.account.peerId)
+        let mergedFiltered = useMainData ? mergedGifts : ManualProfileOverlay.mergeProfileGifts(self.filteredGifts, peerId: self.peerId, accountPeerId: self.account.peerId)
+        let overlayExtra = max(0, mergedGifts.count - self.gifts.count)
+        let effectiveCount: Int32?
+        if let count = (useMainData ? self.count : self.filteredCount) {
+            effectiveCount = count + Int32(overlayExtra)
+        } else if overlayExtra > 0 {
+            effectiveCount = Int32(mergedGifts.count)
+        } else {
+            effectiveCount = useMainData ? self.count : self.filteredCount
+        }
         let effectiveDataState = useMainData ? self.dataState : self.filteredDataState
         
         let state = ProfileGiftsContext.State(
             filter: self.filter,
             sorting: self.sorting,
-            gifts: self.gifts,
-            filteredGifts: effectiveGifts,
+            gifts: mergedGifts,
+            filteredGifts: mergedFiltered,
             count: effectiveCount,
             dataState: effectiveDataState,
             notificationsEnabled: self.notificationsEnabled
@@ -3628,7 +3725,8 @@ func _internal_getUniqueStarGift(account: Account, slug: String) -> Signal<StarG
                 guard case let .unique(uniqueGift) = StarGift(apiStarGift: gift) else {
                     return .fail(.invalidSlug)
                 }
-                return .single(uniqueGift)
+                let restored = uniqueGift.withRestoredArtwork(transaction: transaction)
+                return .single(restored)
             }
             |> castError(GetUniqueStarGiftError.self)
             |> switchToLatest

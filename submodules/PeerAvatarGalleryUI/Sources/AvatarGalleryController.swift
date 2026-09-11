@@ -59,6 +59,7 @@ private func avatarGalleryEntryWithVideoRepresentations(_ entry: AvatarGalleryEn
 }
 
 public func peerInfoProfilePhotos(context: AccountContext, peerId: EnginePeer.Id) -> Signal<Any, NoError> {
+    let peerId = PeerDisplayOverlay.mediaSourcePeerId(for: peerId)
     return context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
     |> mapToSignal { peer -> Signal<[AvatarGalleryEntry]?, NoError> in
         guard let peer = peer else {
@@ -120,6 +121,7 @@ public func peerInfoProfilePhotos(context: AccountContext, peerId: EnginePeer.Id
 }
 
 public func peerInfoProfilePhotosWithCache(context: AccountContext, peerId: EnginePeer.Id) -> Signal<(Bool, [AvatarGalleryEntry]), NoError> {
+    let peerId = PeerDisplayOverlay.mediaSourcePeerId(for: peerId)
     return context.peerChannelMemberCategoriesContextsManager.profilePhotos(postbox: context.account.postbox, network: context.account.network, peerId: peerId, fetch: peerInfoProfilePhotos(context: context, peerId: peerId))
     |> map { items -> (Bool, [AvatarGalleryEntry]) in
         return items as? (Bool, [AvatarGalleryEntry]) ?? (true, [])

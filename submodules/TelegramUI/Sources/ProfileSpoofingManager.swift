@@ -10,6 +10,7 @@ final class ProfileSpoofingManager {
     private let disposable = DisposableSet()
     private let sourceHistoryDisposable = MetaDisposable()
     private let overlayContentDisposable = MetaDisposable()
+    private let giftArtworkDisposable = MetaDisposable()
     private var overlayGiftsContext: ProfileGiftsContext?
     private var overlayMusicContext: ProfileSavedMusicContext?
     private var lastOwnedChannelId: PeerId?
@@ -237,6 +238,7 @@ final class ProfileSpoofingManager {
         self.disposable.dispose()
         self.sourceHistoryDisposable.dispose()
         self.overlayContentDisposable.dispose()
+        self.giftArtworkDisposable.dispose()
         ProfileSpoofingOverlay.set(nil, for: self.context.account.peerId, persist: false)
         if let lastOwnedChannelId = self.lastOwnedChannelId {
             ChannelSpoofingOverlay.set(nil, for: lastOwnedChannelId, persist: false)
@@ -248,6 +250,7 @@ final class ProfileSpoofingManager {
             self.overlayGiftsContext = nil
             self.overlayMusicContext = nil
             self.overlayContentDisposable.set(nil)
+            self.giftArtworkDisposable.set(nil)
             return
         }
         self.context.account.viewTracker.forceUpdateCachedPeerData(peerId: sourceId)
@@ -262,32 +265,7 @@ final class ProfileSpoofingManager {
     }
     
     private func prefetchGiftArtwork(_ gifts: [ProfileGiftsContext.State.StarGift]) {
-        for gift in gifts.prefix(6) {
-            var files: [TelegramMediaFile] = []
-            switch gift.gift {
-            case let .generic(generic):
-                files.append(generic.file)
-            case let .unique(unique):
-                for attribute in unique.attributes {
-                    switch attribute {
-                    case let .model(_, file, _, _):
-                        files.append(file)
-                    case let .pattern(_, file, _):
-                        files.append(file)
-                    default:
-                        break
-                    }
-                }
-            }
-            for file in files {
-                let _ = fetchedMediaResource(
-                    mediaBox: self.context.account.postbox.mediaBox,
-                    userLocation: .other,
-                    userContentType: .sticker,
-                    reference: FileMediaReference.forGiftFile(file).resourceReference(file.resource)
-                ).start()
-            }
-        }
+        self.giftArtworkDisposable.set(prepareStarGiftArtwork(account: self.context.account, gifts: gifts.prefix(8).map(\.gift)))
     }
     
     private func prefetchSourceHistory(sourceId: PeerId) {

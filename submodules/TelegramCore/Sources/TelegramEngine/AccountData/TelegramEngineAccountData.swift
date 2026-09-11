@@ -89,6 +89,10 @@ public extension TelegramEngine {
         
         public func setStarGiftStatus(starGift: StarGift.UniqueGift, expirationDate: Int32?) -> Signal<Never, NoError> {
             let peerId = self.account.peerId
+            if ManualProfileOverlay.containsGift(slug: starGift.slug, peerId: peerId) {
+                let _ = ManualProfileOverlay.wearGift(slug: starGift.slug, peerId: peerId)
+                return .complete()
+            }
             
             var flags: Int32 = 0
             if let _ = expirationDate {
@@ -149,6 +153,9 @@ public extension TelegramEngine {
         
         public func setEmojiStatus(file: TelegramMediaFile?, expirationDate: Int32?) -> Signal<Never, NoError> {
             let peerId = self.account.peerId
+            if file == nil, ManualProfileOverlay.clearWear(peerId: peerId) {
+                return .complete()
+            }
             
             let remoteApply = self.account.network.request(Api.functions.account.updateEmojiStatus(emojiStatus: file.flatMap({ file in
                 var flags: Int32 = 0

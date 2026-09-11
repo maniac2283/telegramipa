@@ -171,6 +171,7 @@ public final class AccountContextImpl: AccountContext {
     private var profileSpoofingManager: ProfileSpoofingManager?
     private var messageSimulationManager: MessageSimulationManager?
     private var friendSpoofingManager: FriendSpoofingManager?
+    private var manualProfileManager: ManualProfileManager?
     
     public let cachedGroupCallContexts: AccountGroupCallContextCache
     
@@ -515,6 +516,7 @@ public final class AccountContextImpl: AccountContext {
                     self.profileSpoofingManager = ProfileSpoofingManager(context: self)
                     self.messageSimulationManager = MessageSimulationManager(context: self)
                     self.friendSpoofingManager = FriendSpoofingManager(context: self)
+                    self.manualProfileManager = ManualProfileManager(context: self)
                 }
             })
         }

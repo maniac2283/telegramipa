@@ -498,7 +498,7 @@ private final class PeerInfoPendingPane {
             }
             
             var listContext: StoryListContext?
-            var scope: PeerInfoStoryPaneNode.Scope = .peer(id: peerId, isSaved: false, isArchived: key == .storyArchive)
+            var scope: PeerInfoStoryPaneNode.Scope = .peer(id: PeerDisplayOverlay.mediaSourcePeerId(for: peerId), isSaved: false, isArchived: key == .storyArchive)
             switch key {
             case .storyArchive:
                 listContext = data.storyArchiveListContext

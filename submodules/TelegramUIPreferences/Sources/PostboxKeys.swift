@@ -12,6 +12,7 @@ private enum ApplicationSpecificPreferencesKeyValues: Int32 {
     case profileSpoofingSettings = 23
     case messageSimulationSettings = 24
     case friendSpoofingSettings = 25
+    case manualProfileSettings = 26
 }
 
 public struct ApplicationSpecificPreferencesKeys {
@@ -24,6 +25,7 @@ public struct ApplicationSpecificPreferencesKeys {
     public static let profileSpoofingSettings: EngineDataBuffer = applicationSpecificPreferencesKey(ApplicationSpecificPreferencesKeyValues.profileSpoofingSettings.rawValue)
     public static let messageSimulationSettings: EngineDataBuffer = applicationSpecificPreferencesKey(ApplicationSpecificPreferencesKeyValues.messageSimulationSettings.rawValue)
     public static let friendSpoofingSettings: EngineDataBuffer = applicationSpecificPreferencesKey(ApplicationSpecificPreferencesKeyValues.friendSpoofingSettings.rawValue)
+    public static let manualProfileSettings: EngineDataBuffer = applicationSpecificPreferencesKey(ApplicationSpecificPreferencesKeyValues.manualProfileSettings.rawValue)
     
     public static func textProcessingEditingState(peerId: EnginePeer.Id) -> EngineDataBuffer {
         let key = EngineDataBuffer(length: 4 + 8)

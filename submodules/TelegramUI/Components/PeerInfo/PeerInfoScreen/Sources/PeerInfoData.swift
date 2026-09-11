@@ -803,14 +803,15 @@ public func keepPeerInfoScreenDataHot(context: AccountContext, peerId: PeerId, c
             return .complete()
         case .user, .channel, .group:
             var signals: [Signal<Never, NoError>] = []
+            let contentPeerId = PeerDisplayOverlay.mediaSourcePeerId(for: peerId)
             
             signals.append(context.peerChannelMemberCategoriesContextsManager.profileData(postbox: context.account.postbox, network: context.account.network, peerId: peerId, customData: peerInfoAvailableMediaPanes(context: context, peerId: peerId, chatLocation: chatLocation, isMyProfile: false, chatLocationContextHolder: chatLocationContextHolder, sharedMediaFromForumTopic: nil) |> ignoreValues) |> ignoreValues)
-            signals.append(context.peerChannelMemberCategoriesContextsManager.profilePhotos(postbox: context.account.postbox, network: context.account.network, peerId: peerId, fetch: peerInfoProfilePhotos(context: context, peerId: peerId)) |> ignoreValues)
+            signals.append(context.peerChannelMemberCategoriesContextsManager.profilePhotos(postbox: context.account.postbox, network: context.account.network, peerId: contentPeerId, fetch: peerInfoProfilePhotos(context: context, peerId: contentPeerId)) |> ignoreValues)
             
             if case .user = inputData {
                 signals.append(Signal { _ in
-                    let listContext = PeerStoryListContext(account: context.account, peerId: peerId, isArchived: false, folderId: nil)
-                    let expiringListContext = PeerExpiringStoryListContext(account: context.account, peerId: peerId)
+                    let listContext = PeerStoryListContext(account: context.account, peerId: contentPeerId, isArchived: false, folderId: nil)
+                    let expiringListContext = PeerExpiringStoryListContext(account: context.account, peerId: contentPeerId)
                     
                     return ActionDisposable {
                         let _ = listContext
@@ -1238,6 +1239,7 @@ func peerInfoScreenData(
                 businessConnectedBot: nil
             ))
         case let .user(userPeerId, secretChatId, kind):
+            let contentPeerId = PeerDisplayOverlay.mediaSourcePeerId(for: userPeerId)
             let groupsInCommon: GroupsInCommonContext?
             if isMyProfile {
                 groupsInCommon = nil
@@ -1257,8 +1259,8 @@ func peerInfoScreenData(
                         profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: giftsPeerId, filter: ProfileGiftsContext.Filters.All.subtracting(.hidden))
                         profileGiftsCollectionsContext = ProfileGiftsCollectionsContext(account: context.account, peerId: giftsPeerId, allGiftsContext: profileGiftsContext)
                     } else {
-                        profileGiftsContext = existingProfileGiftsContext ?? ProfileGiftsContext(account: context.account, peerId: userPeerId)
-                        profileGiftsCollectionsContext = existingProfileGiftsCollectionsContext ?? ProfileGiftsCollectionsContext(account: context.account, peerId: userPeerId, allGiftsContext: profileGiftsContext)
+                        profileGiftsContext = existingProfileGiftsContext ?? ProfileGiftsContext(account: context.account, peerId: contentPeerId)
+                        profileGiftsCollectionsContext = existingProfileGiftsCollectionsContext ?? ProfileGiftsCollectionsContext(account: context.account, peerId: contentPeerId, allGiftsContext: profileGiftsContext)
                     }
                     
                     if switchToUpgradableGifts {
@@ -1378,7 +1380,7 @@ func peerInfoScreenData(
                 secretChatKeyFingerprint = context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.SecretChatKeyFingerprint(id: secretChatId))
             }
             
-            let storyListContext = PeerStoryListContext(account: context.account, peerId: peerId, isArchived: false, folderId: nil)
+            let storyListContext = PeerStoryListContext(account: context.account, peerId: contentPeerId, isArchived: false, folderId: nil)
             let hasStories: Signal<Bool?, NoError> = storyListContext.state
             |> map { state -> Bool? in
                 if !state.hasCache {
@@ -1391,7 +1393,7 @@ func peerInfoScreenData(
             let hasStoryArchive: Signal<Bool?, NoError>
             var storyArchiveListContext: StoryListContext?
             if isMyProfile {
-                let storyArchiveListContextValue = PeerStoryListContext(account: context.account, peerId: peerId, isArchived: true, folderId: nil)
+                let storyArchiveListContextValue = PeerStoryListContext(account: context.account, peerId: contentPeerId, isArchived: true, folderId: nil)
                 storyArchiveListContext = storyArchiveListContextValue
                 hasStoryArchive = storyArchiveListContextValue.state
                 |> map { state -> Bool? in
@@ -1569,7 +1571,7 @@ func peerInfoScreenData(
                 webAppPermissions = .single(nil)
             }
                                     
-            let savedMusicContext = ProfileSavedMusicContext(account: context.account, peerId: PeerDisplayOverlay.musicSourcePeerId(for: peerId))
+            let savedMusicContext = ProfileSavedMusicContext(account: context.account, peerId: PeerDisplayOverlay.musicSourcePeerId(for: contentPeerId))
                
             let businessConnectedBot: Signal<EnginePeer?, NoError>
             if isMyProfile {
@@ -1614,7 +1616,7 @@ func peerInfoScreenData(
                 hasSavedMessages,
                 hasSavedMessageTags,
                 hasBotPreviewItems,
-                peerInfoPersonalOrLinkedChannel(context: context, peerId: peerId, isSettings: false),
+                peerInfoPersonalOrLinkedChannel(context: context, peerId: contentPeerId, isSettings: false),
                 privacySettings,
                 starsRevenueContextAndState,
                 revenueContextAndState,
@@ -1687,12 +1689,15 @@ func peerInfoScreenData(
                     availablePanes = nil
                 }
                 
-                if var currentAvailablePanes = availablePanes, let cachedData = peerView.cachedData as? CachedUserData, let mainProfileTab = cachedData.mainProfileTab {
-                    let mainTabKey = PeerInfoPaneKey(tab: mainProfileTab)
-                    if currentAvailablePanes.contains(mainTabKey) && currentAvailablePanes.first != mainTabKey {
-                        currentAvailablePanes = currentAvailablePanes.filter { $0 != mainTabKey }
-                        currentAvailablePanes.insert(mainTabKey, at: 0)
-                        availablePanes = currentAvailablePanes
+                if var currentAvailablePanes = availablePanes {
+                    let overlayCached = PeerDisplayOverlay.applyCached(peerId: peerView.peerId, data: peerView.cachedData) as? CachedUserData
+                    if let mainProfileTab = overlayCached?.mainProfileTab ?? (peerView.cachedData as? CachedUserData)?.mainProfileTab {
+                        let mainTabKey = PeerInfoPaneKey(tab: mainProfileTab)
+                        if currentAvailablePanes.contains(mainTabKey) && currentAvailablePanes.first != mainTabKey {
+                            currentAvailablePanes = currentAvailablePanes.filter { $0 != mainTabKey }
+                            currentAvailablePanes.insert(mainTabKey, at: 0)
+                            availablePanes = currentAvailablePanes
+                        }
                     }
                 }
                 

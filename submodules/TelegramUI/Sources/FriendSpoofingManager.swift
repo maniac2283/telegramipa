@@ -8,6 +8,9 @@ import AccountContext
 final class FriendSpoofingManager {
     private let context: AccountContext
     private let disposable = DisposableSet()
+    private let giftStateDisposable = MetaDisposable()
+    private let giftArtworkDisposable = MetaDisposable()
+    private var overlayGiftsContexts: [PeerId: ProfileGiftsContext] = [:]
     private var lastTargetPeerIds: Set<PeerId> = []
     
     private struct ResolvedMapping {
@@ -84,6 +87,7 @@ final class FriendSpoofingManager {
             for state in next.values {
                 account.viewTracker.forceUpdateCachedPeerData(peerId: state.sourcePeerId)
             }
+            self?.applyGiftPrefetch(sourceIds: Set(next.values.map(\.sourcePeerId)))
             if enabled && !resolved.isEmpty {
                 let _ = updateFriendSpoofingSettings(engine: engine, { current in
                     var nextSettings = current
@@ -106,7 +110,36 @@ final class FriendSpoofingManager {
     
     deinit {
         self.disposable.dispose()
+        self.giftStateDisposable.dispose()
+        self.giftArtworkDisposable.dispose()
+        self.overlayGiftsContexts = [:]
         FriendSpoofingOverlay.replaceAll([:], persist: false)
+    }
+    
+    private func applyGiftPrefetch(sourceIds: Set<PeerId>) {
+        if sourceIds.isEmpty {
+            self.overlayGiftsContexts = [:]
+            self.giftStateDisposable.set(nil)
+            self.giftArtworkDisposable.set(nil)
+            return
+        }
+        var nextContexts: [PeerId: ProfileGiftsContext] = [:]
+        for sourceId in sourceIds {
+            nextContexts[sourceId] = self.overlayGiftsContexts[sourceId] ?? ProfileGiftsContext(account: self.context.account, peerId: sourceId, filter: ProfileGiftsContext.Filters.All.subtracting(.hidden), limit: 8)
+        }
+        self.overlayGiftsContexts = nextContexts
+        let signals = nextContexts.values.map { $0.state }
+        self.giftStateDisposable.set((combineLatest(signals)
+        |> deliverOnMainQueue).start(next: { [weak self] states in
+            guard let self else {
+                return
+            }
+            var gifts: [StarGift] = []
+            for state in states {
+                gifts.append(contentsOf: state.gifts.prefix(8).map(\.gift))
+            }
+            self.giftArtworkDisposable.set(prepareStarGiftArtwork(account: self.context.account, gifts: gifts))
+        }))
     }
     
     private static func statesEqual(_ lhs: FriendSpoofingOverlayState, _ rhs: FriendSpoofingOverlayState) -> Bool {
