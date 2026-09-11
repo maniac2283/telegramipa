@@ -840,7 +840,7 @@ public func developerSettingsController(context: AccountContext) -> ViewControll
                 return .complete()
             }
             return context.engine.payments.getUniqueStarGift(slug: slug)
-            |> mapToSignal { uniqueGift -> Signal<Never, NoError> in
+            |> mapToSignal { uniqueGift -> Signal<Never, GetUniqueStarGiftError> in
                 guard uniqueGift.hasRenderableArtwork else {
                     return .complete()
                 }
@@ -860,6 +860,7 @@ public func developerSettingsController(context: AccountContext) -> ViewControll
                     current.upsertGift(entry)
                     return current
                 })
+                |> castError(GetUniqueStarGiftError.self)
             }
             |> `catch` { _ -> Signal<Never, NoError> in
                 return .complete()
