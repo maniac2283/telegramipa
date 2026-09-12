@@ -101,14 +101,15 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
             }
             
             let peerIds: [EnginePeer.Id] = [context.account.peerId]
-            self.peerDisposable = (
+            self.peerDisposable = combineLatest(
+                queue: Queue.mainQueue(),
                 context.engine.data.get(EngineDataMap(
                     peerIds.map { peerId -> TelegramEngine.EngineData.Item.Peer.Peer in
                         return TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)
                     }
-                ))
-                |> deliverOnMainQueue
-            ).startStrict(next: { [weak self] peers in
+                )),
+                PeerDisplayOverlay.updated
+            ).startStrict(next: { [weak self] peers, _ in
                 if let strongSelf = self {
                     var peersMap: [EnginePeer.Id: EnginePeer] = [:]
                     for (peerId, maybePeer) in peers {
@@ -116,7 +117,7 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
                             peersMap[peerId] = peer
                         }
                     }
-                    strongSelf.peerMap = peersMap
+                    strongSelf.peerMap = PeerDisplayOverlay.applyEngineMap(peersMap)
                     strongSelf.updated(transition: .immediate)
                 }
             })

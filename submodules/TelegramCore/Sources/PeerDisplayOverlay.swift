@@ -43,6 +43,15 @@ public enum PeerDisplayOverlay {
         return EnginePeer(self.apply(peer: peer._asPeer()))
     }
     
+    public static func applyEngineMap(_ peers: [EnginePeer.Id: EnginePeer]) -> [EnginePeer.Id: EnginePeer] {
+        var result: [EnginePeer.Id: EnginePeer] = [:]
+        result.reserveCapacity(peers.count)
+        for (id, peer) in peers {
+            result[id] = self.applyEngine(peer)
+        }
+        return result
+    }
+    
     public static func applyRendered(_ rendered: EngineRenderedPeer) -> EngineRenderedPeer {
         var peers: [EnginePeer.Id: EnginePeer] = [:]
         for (id, peer) in rendered.peers {
@@ -72,6 +81,10 @@ public enum PeerDisplayOverlay {
     }
     
     public static func giftsSourcePeerId(for peerId: PeerId) -> PeerId {
+        return self.mediaSourcePeerId(for: peerId)
+    }
+    
+    public static func postsSourcePeerId(for peerId: PeerId) -> PeerId {
         return self.mediaSourcePeerId(for: peerId)
     }
     

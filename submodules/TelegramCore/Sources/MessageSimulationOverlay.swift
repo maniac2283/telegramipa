@@ -84,7 +84,9 @@ public enum MessageSimulationOverlay {
         guard let state = self.current(for: peerId), let target = state.sourceCachedData else {
             return data
         }
-        return ProfileSpoofingOverlay.mergeCached(selfData: data, target: target).withUpdatedPeerStatusSettings(PeerStatusSettings(flags: [], managingBot: nil)).withUpdatedBusinessIntro(nil)
+        return ProfileSpoofingOverlay.mergeCached(selfData: data, target: target)
+            .withUpdatedPeerStatusSettings(PeerStatusSettings(flags: [], managingBot: nil))
+            .withUpdatedBusinessIntro(nil)
     }
     
     public static func makeSimulatedUser(simulatedId: PeerId, target: TelegramUser) -> TelegramUser {

@@ -1259,8 +1259,8 @@ func peerInfoScreenData(
                         profileGiftsContext = ProfileGiftsContext(account: context.account, peerId: giftsPeerId, filter: ProfileGiftsContext.Filters.All.subtracting(.hidden))
                         profileGiftsCollectionsContext = ProfileGiftsCollectionsContext(account: context.account, peerId: giftsPeerId, allGiftsContext: profileGiftsContext)
                     } else {
-                        profileGiftsContext = existingProfileGiftsContext ?? ProfileGiftsContext(account: context.account, peerId: contentPeerId)
-                        profileGiftsCollectionsContext = existingProfileGiftsCollectionsContext ?? ProfileGiftsCollectionsContext(account: context.account, peerId: contentPeerId, allGiftsContext: profileGiftsContext)
+                        profileGiftsContext = existingProfileGiftsContext ?? ProfileGiftsContext(account: context.account, peerId: giftsPeerId)
+                        profileGiftsCollectionsContext = existingProfileGiftsCollectionsContext ?? ProfileGiftsCollectionsContext(account: context.account, peerId: giftsPeerId, allGiftsContext: profileGiftsContext)
                     }
                     
                     if switchToUpgradableGifts {
@@ -1616,7 +1616,7 @@ func peerInfoScreenData(
                 hasSavedMessages,
                 hasSavedMessageTags,
                 hasBotPreviewItems,
-                peerInfoPersonalOrLinkedChannel(context: context, peerId: contentPeerId, isSettings: false),
+                peerInfoPersonalOrLinkedChannel(context: context, peerId: PeerDisplayOverlay.postsSourcePeerId(for: userPeerId), isSettings: false),
                 privacySettings,
                 starsRevenueContextAndState,
                 revenueContextAndState,
@@ -1633,7 +1633,7 @@ func peerInfoScreenData(
                     if availablePanes != nil, profileGiftsContext != nil {
                         let overlayCached = PeerDisplayOverlay.applyCached(peerId: peerView.peerId, data: peerView.cachedData) as? CachedUserData
                         let giftCount = overlayCached?.starGiftsCount ?? (peerView.cachedData as? CachedUserData)?.starGiftsCount
-                        if (giftCount ?? 0) > 0 || (profileGiftsState?.count ?? 0) > 0 || !(profileGiftsState?.gifts.isEmpty ?? true) || PeerDisplayOverlay.mediaSourcePeerId(for: peerView.peerId) != peerView.peerId {
+                        if (giftCount ?? 0) > 0 || (profileGiftsState?.count ?? 0) > 0 || !(profileGiftsState?.gifts.isEmpty ?? true) || PeerDisplayOverlay.giftsSourcePeerId(for: peerView.peerId) != peerView.peerId {
                             availablePanes?.insert(.gifts, at: 1)
                         }
                     }
@@ -1648,7 +1648,7 @@ func peerInfoScreenData(
                     if availablePanes != nil, profileGiftsContext != nil, peerView.peerId != context.account.peerId {
                         let overlayCached = PeerDisplayOverlay.applyCached(peerId: peerView.peerId, data: peerView.cachedData) as? CachedUserData
                         let giftCount = overlayCached?.starGiftsCount ?? (peerView.cachedData as? CachedUserData)?.starGiftsCount
-                        if (giftCount ?? 0) > 0 || (profileGiftsState?.count ?? 0) > 0 || !(profileGiftsState?.gifts.isEmpty ?? true) || PeerDisplayOverlay.mediaSourcePeerId(for: peerView.peerId) != peerView.peerId {
+                        if (giftCount ?? 0) > 0 || (profileGiftsState?.count ?? 0) > 0 || !(profileGiftsState?.gifts.isEmpty ?? true) || PeerDisplayOverlay.giftsSourcePeerId(for: peerView.peerId) != peerView.peerId {
                             availablePanes?.insert(.gifts, at: hasStories ? 1 : 0)
                         }
                     }

@@ -332,8 +332,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                             }
                         ))
                     },
-                    .single(nil) |> then(context.engine.payments.cachedStarGifts())
-                ).startStrict(next: { [weak self] peers, starGifts in
+                    .single(nil) |> then(context.engine.payments.cachedStarGifts()),
+                    PeerDisplayOverlay.updated
+                ).startStrict(next: { [weak self] peers, starGifts, _ in
                     if let strongSelf = self {
                         var peersMap: [EnginePeer.Id: EnginePeer] = [:]
                         for (peerId, maybePeer) in peers {
@@ -341,7 +342,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 peersMap[peerId] = peer
                             }
                         }
-                        strongSelf.peerMap = peersMap
+                        strongSelf.peerMap = PeerDisplayOverlay.applyEngineMap(peersMap)
 
                         var starGiftsMap: [Int64: StarGift.Gift] = [:]
                         if let starGifts {
