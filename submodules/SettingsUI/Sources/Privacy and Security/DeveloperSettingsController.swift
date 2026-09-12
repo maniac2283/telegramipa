@@ -83,11 +83,11 @@ private final class DeveloperSettingsControllerArguments {
 }
 
 private enum DeveloperSettingsSection: Int32 {
+    case manual
     case spoofing
     case channelSpoofing
     case friendSpoofing
     case messageSimulation
-    case manual
 }
 
 private enum DeveloperSettingsEntry: ItemListNodeEntry {
@@ -152,92 +152,92 @@ private enum DeveloperSettingsEntry: ItemListNodeEntry {
     
     var stableId: Int32 {
         switch self {
-        case .spoofingHeader:
-            return 0
-        case .spoofingEnabled:
-            return 1
-        case .spoofingTarget:
-            return 2
-        case .spoofingInfo:
-            return 3
-        case .channelSpoofingHeader:
-            return 4
-        case .channelSpoofingEnabled:
-            return 5
-        case .channelSpoofingMyChannel:
-            return 6
-        case .channelSpoofingAs:
-            return 7
-        case .channelSpoofingInfo:
-            return 8
-        case .friendSpoofingHeader:
-            return 9
-        case .friendSpoofingEnabled:
-            return 10
-        case .friendSpoofingTarget:
-            return 11
-        case .friendSpoofingSource:
-            return 12
-        case .friendSpoofingAdd:
-            return 13
-        case let .friendSpoofingMapping(index, _):
-            return 100 + Int32(index)
-        case .friendSpoofingInfo:
-            return 180
-        case .messageSimulationHeader:
-            return 200
-        case .messageSimulationEnabled:
-            return 201
-        case .messageSimulationTarget:
-            return 202
-        case .messageSimulationText:
-            return 203
-        case .messageSimulationSendText:
-            return 204
-        case .messageSimulationSendPicture:
-            return 205
-        case .messageSimulationSendGift:
-            return 206
-        case .messageSimulationOpen:
-            return 207
-        case .messageSimulationInfo:
-            return 208
         case .manualHeader:
-            return 300
+            return 0
         case .manualFirstName:
-            return 301
+            return 1
         case .manualLastName:
-            return 302
+            return 2
         case .manualPhotoSet:
-            return 303
+            return 3
         case .manualPhotoClear:
-            return 304
+            return 4
         case .manualAnonymousNumber:
-            return 305
+            return 5
         case .manualUsernameDraft:
-            return 306
+            return 6
         case .manualAddUsername:
-            return 307
+            return 7
         case let .manualUsername(index, _):
-            return 320 + Int32(index)
+            return 20 + Int32(index)
         case .manualHoldVerification:
-            return 380
+            return 80
         case .manualMajorVerification:
-            return 381
+            return 81
         case .manualGiftName:
-            return 382
+            return 82
         case .manualGiftNumber:
-            return 383
+            return 83
         case .manualAddGift:
-            return 384
+            return 84
         case let .manualGiftPin(index, _):
-            return 400 + Int32(index) * 4
+            return 100 + Int32(index) * 4
         case let .manualGiftWear(index, _):
-            return 401 + Int32(index) * 4
+            return 101 + Int32(index) * 4
         case let .manualGiftRemove(index, _):
-            return 402 + Int32(index) * 4
+            return 102 + Int32(index) * 4
         case .manualInfo:
-            return 900
+            return 199
+        case .spoofingHeader:
+            return 200
+        case .spoofingEnabled:
+            return 201
+        case .spoofingTarget:
+            return 202
+        case .spoofingInfo:
+            return 203
+        case .channelSpoofingHeader:
+            return 204
+        case .channelSpoofingEnabled:
+            return 205
+        case .channelSpoofingMyChannel:
+            return 206
+        case .channelSpoofingAs:
+            return 207
+        case .channelSpoofingInfo:
+            return 208
+        case .friendSpoofingHeader:
+            return 209
+        case .friendSpoofingEnabled:
+            return 210
+        case .friendSpoofingTarget:
+            return 211
+        case .friendSpoofingSource:
+            return 212
+        case .friendSpoofingAdd:
+            return 213
+        case let .friendSpoofingMapping(index, _):
+            return 300 + Int32(index)
+        case .friendSpoofingInfo:
+            return 380
+        case .messageSimulationHeader:
+            return 400
+        case .messageSimulationEnabled:
+            return 401
+        case .messageSimulationTarget:
+            return 402
+        case .messageSimulationText:
+            return 403
+        case .messageSimulationSendText:
+            return 404
+        case .messageSimulationSendPicture:
+            return 405
+        case .messageSimulationSendGift:
+            return 406
+        case .messageSimulationOpen:
+            return 407
+        case .messageSimulationInfo:
+            return 408
         }
     }
     
@@ -481,6 +481,32 @@ private enum DeveloperSettingsEntry: ItemListNodeEntry {
 
 private func developerSettingsControllerEntries(settings: ProfileSpoofingSettings, friendSettings: FriendSpoofingSettings, simulation: MessageSimulationSettings, manual: ManualProfileSettings) -> [DeveloperSettingsEntry] {
     var entries: [DeveloperSettingsEntry] = []
+    entries.append(.manualHeader("Manual Profile"))
+    entries.append(.manualFirstName("First name", manual.firstName))
+    entries.append(.manualLastName("Last name", manual.lastName))
+    entries.append(.manualPhotoSet(manual.hasPhotoOverride ? "Change profile picture" : "Set profile picture"))
+    if manual.hasPhotoOverride {
+        entries.append(.manualPhotoClear("Remove profile picture"))
+    }
+    entries.append(.manualAnonymousNumber("Anonymous number +888", manual.anonymousNumber))
+    entries.append(.manualUsernameDraft("Username", manual.usernameDraft))
+    entries.append(.manualAddUsername("Add username"))
+    for (index, username) in manual.normalizedUsernames.enumerated() {
+        entries.append(.manualUsername(index, "Remove @\(username)"))
+    }
+    entries.append(.manualHoldVerification("Hold Verification", manual.holdVerification))
+    entries.append(.manualMajorVerification("Major Verification", manual.majorVerification))
+    entries.append(.manualGiftName("Gift name or t.me/nft slug", manual.giftNameDraft))
+    entries.append(.manualGiftNumber("Gift number #", manual.giftNumberDraft))
+    entries.append(.manualAddGift("Add gift"))
+    for (index, gift) in manual.gifts.enumerated() {
+        let title = gift.displayTitle
+        entries.append(.manualGiftPin(index, gift.pinnedToTop ? "Unpin \(title)" : "Pin \(title)"))
+        entries.append(.manualGiftWear(index, gift.wear ? "Unwear \(title)" : "Wear \(title)"))
+        entries.append(.manualGiftRemove(index, "Remove \(title)"))
+    }
+    entries.append(.manualInfo("Each field applies independently to your profile on this device using Telegram's existing profile UI. Gifts are resolved from Telegram collectible data and shown in the normal Gifts tab, including artwork, model, backdrop, symbol, number, pinning and wearing. Empty fields leave the real or spoofed value unchanged. Nothing is written to your Telegram account."))
+    
     entries.append(.spoofingHeader("Spoofing"))
     entries.append(.spoofingEnabled("Enabled", settings.isEnabled))
     entries.append(.spoofingTarget("Username or ID", settings.target))
@@ -513,32 +539,6 @@ private func developerSettingsControllerEntries(settings: ProfileSpoofingSetting
     entries.append(.messageSimulationSendGift("Send simulated gift"))
     entries.append(.messageSimulationOpen("Open conversation"))
     entries.append(.messageSimulationInfo("Creates a local-only chat that looks like a normal Telegram conversation with the specified profile, including photo, bio, Premium, verification, rating, gifts and other visible details. Incoming text, emoji, pictures and gifts are simulated on this device. You can reply in the chat; the simulated user receives, reads and replies locally. Gift bubbles use the same chat gift UI as Telegram. Messages persist until you delete them. No real Telegram accounts, messages or servers are changed."))
-    
-    entries.append(.manualHeader("Manual"))
-    entries.append(.manualFirstName("First name", manual.firstName))
-    entries.append(.manualLastName("Last name", manual.lastName))
-    entries.append(.manualPhotoSet(manual.hasPhotoOverride ? "Change profile picture" : "Set profile picture"))
-    if manual.hasPhotoOverride {
-        entries.append(.manualPhotoClear("Remove profile picture"))
-    }
-    entries.append(.manualAnonymousNumber("Anonymous number +888", manual.anonymousNumber))
-    entries.append(.manualUsernameDraft("Username", manual.usernameDraft))
-    entries.append(.manualAddUsername("Add username"))
-    for (index, username) in manual.normalizedUsernames.enumerated() {
-        entries.append(.manualUsername(index, "Remove @\(username)"))
-    }
-    entries.append(.manualHoldVerification("Hold Verification", manual.holdVerification))
-    entries.append(.manualMajorVerification("Major Verification", manual.majorVerification))
-    entries.append(.manualGiftName("Gift name or t.me/nft slug", manual.giftNameDraft))
-    entries.append(.manualGiftNumber("Gift number #", manual.giftNumberDraft))
-    entries.append(.manualAddGift("Add gift"))
-    for (index, gift) in manual.gifts.enumerated() {
-        let title = gift.displayTitle
-        entries.append(.manualGiftPin(index, gift.pinnedToTop ? "Unpin \(title)" : "Pin \(title)"))
-        entries.append(.manualGiftWear(index, gift.wear ? "Unwear \(title)" : "Wear \(title)"))
-        entries.append(.manualGiftRemove(index, "Remove \(title)"))
-    }
-    entries.append(.manualInfo("Each field applies independently to your profile on this device using Telegram's existing profile UI. Gifts are resolved from Telegram collectible data and shown in the normal Gifts tab, including artwork, model, backdrop, symbol, number, pinning and wearing. Empty fields leave the real or spoofed value unchanged. Nothing is written to your Telegram account."))
     return entries
 }
 
