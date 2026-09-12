@@ -592,11 +592,13 @@ public func developerSettingsController(context: AccountContext) -> ViewControll
         return FriendSpoofingSettings.fromPreference(entry)
     }
     
-    let manual = context.engine.data.subscribe(
-        TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: ApplicationSpecificPreferencesKeys.manualProfileSettings)
-    )
-    |> map { entry -> ManualProfileSettings in
-        return ManualProfileSettings.fromPreference(entry)
+    let manual = Signal<ManualProfileSettings, NoError> { subscriber in
+        subscriber.putNext(ManualProfileSettings.defaultSettings)
+        return context.engine.data.subscribe(
+            TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: ApplicationSpecificPreferencesKeys.manualProfileSettings)
+        ).start(next: { entry in
+            subscriber.putNext(ManualProfileSettings.fromPreference(entry))
+        })
     }
     
     var presentControllerImpl: ((ViewController, Any?) -> Void)?
@@ -894,7 +896,7 @@ public func developerSettingsController(context: AccountContext) -> ViewControll
     
     let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, settings, friendSettings, simulation, manual)
     |> map { presentationData, settings, friendSettings, simulation, manual -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Developer Settings"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: false)
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Manual Profile"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: false)
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: developerSettingsControllerEntries(settings: settings, friendSettings: friendSettings, simulation: simulation, manual: manual), style: .blocks, animateChanges: false)
         return (controllerState, (listState, arguments))
     }

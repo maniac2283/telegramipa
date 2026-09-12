@@ -717,7 +717,7 @@ private func privacyAndSecurityControllerEntries(
         entries.append(.passkeys(presentationData.theme, presentationData.strings.PrivacySettings_Passkey, passkeysString))
     }
     
-    entries.append(.developerSettings(presentationData.theme, "Developer Settings"))
+    entries.append(.developerSettings(presentationData.theme, "Developer Settings · Manual"))
     
     if let privacySettings = privacySettings {
         let value: Int32?
