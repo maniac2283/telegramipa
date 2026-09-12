@@ -103,7 +103,7 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
             let peerIds: [EnginePeer.Id] = [context.account.peerId]
             self.peerDisposable = combineLatest(
                 queue: Queue.mainQueue(),
-                context.engine.data.get(EngineDataMap(
+                context.engine.data.subscribe(EngineDataMap(
                     peerIds.map { peerId -> TelegramEngine.EngineData.Item.Peer.Peer in
                         return TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)
                     }

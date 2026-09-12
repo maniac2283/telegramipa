@@ -1628,6 +1628,9 @@ func peerInfoScreenData(
             )
             |> mapToSignal { peerView, availablePanes, globalNotificationSettings, encryptionKeyFingerprint, status, hasStories, hasStoryArchive, recommendedBots, accountIsPremium, savedMessagesPeer, hasSavedMessagesChats, hasSavedMessages, hasSavedMessageTags, hasBotPreviewItems, personalChannel, privacySettings, starsRevenueContextAndState, revenueContextAndState, premiumGiftOptions, webAppPermissions, savedMusicState, businessConnectedBot, profileGiftsState -> Signal<PeerInfoScreenData, NoError> in
                 var availablePanes = availablePanes
+                if availablePanes == nil, PeerDisplayOverlay.isOverlaying(peerView.peerId) || MessageSimulationOverlay.current(for: peerView.peerId) != nil {
+                    availablePanes = []
+                }
                 if isMyProfile {
                     availablePanes?.insert(.stories, at: 0)
                     if availablePanes != nil, profileGiftsContext != nil {
@@ -1684,6 +1687,17 @@ func peerInfoScreenData(
                     
                     if let recommendedBots, recommendedBots.count > 0 {
                         availablePanes?.append(.similarBots)
+                    }
+                } else if PeerDisplayOverlay.isOverlaying(peerView.peerId) || MessageSimulationOverlay.current(for: peerView.peerId) != nil {
+                    if availablePanes == nil {
+                        availablePanes = []
+                    }
+                    if profileGiftsContext != nil, peerView.peerId != context.account.peerId {
+                        let overlayCached = PeerDisplayOverlay.applyCached(peerId: peerView.peerId, data: peerView.cachedData) as? CachedUserData
+                        let giftCount = overlayCached?.starGiftsCount ?? (peerView.cachedData as? CachedUserData)?.starGiftsCount
+                        if (giftCount ?? 0) > 0 || (profileGiftsState?.count ?? 0) > 0 || !(profileGiftsState?.gifts.isEmpty ?? true) || PeerDisplayOverlay.giftsSourcePeerId(for: peerView.peerId) != peerView.peerId {
+                            availablePanes?.insert(.gifts, at: 0)
+                        }
                     }
                 } else {
                     availablePanes = nil

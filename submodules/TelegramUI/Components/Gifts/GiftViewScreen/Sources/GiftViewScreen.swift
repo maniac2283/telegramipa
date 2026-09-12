@@ -326,7 +326,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     peerIdsSignal
                     |> distinctUntilChanged
                     |> mapToSignal { peerIds in
-                        return context.engine.data.get(EngineDataMap(
+                        return context.engine.data.subscribe(EngineDataMap(
                             peerIds.map { peerId -> TelegramEngine.EngineData.Item.Peer.Peer in
                                 return TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)
                             }

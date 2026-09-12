@@ -134,9 +134,23 @@ final class MessageSimulationManager {
         let music = ProfileSavedMusicContext(account: self.context.account, peerId: sourceId)
         self.overlayGiftsContext = gifts
         self.overlayMusicContext = music
-        self.overlayContentDisposable.set((combineLatest(gifts.state, music.state)
-        |> deliverOnMainQueue).start(next: { [weak self] giftState, _ in
-            self?.prefetchGiftArtwork(giftState.gifts)
+        self.overlayContentDisposable.set((combineLatest(
+            self.context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: sourceId)),
+            gifts.state,
+            music.state
+        )
+        |> deliverOnMainQueue).start(next: { [weak self] peer, giftState, _ in
+            guard let self else {
+                return
+            }
+            self.prefetchGiftArtwork(giftState.gifts)
+            var stickerIds: [Int64] = []
+            if let peer, let emojiStatus = peer.emojiStatus, emojiStatus.fileId != 0 {
+                stickerIds.append(emojiStatus.fileId)
+            }
+            if !stickerIds.isEmpty {
+                let _ = self.context.engine.stickers.resolveInlineStickers(fileIds: stickerIds).start()
+            }
         }))
     }
     
