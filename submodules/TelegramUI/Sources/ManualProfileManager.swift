@@ -80,13 +80,23 @@ final class ManualProfileManager {
         }
         
         let gifts = settings.gifts.compactMap { $0.overlayGift() }
+        let holdVerification: PeerVerification?
+        if settings.holdVerification {
+            if let info = settings.holdVerificationInfo, !info.isPlaceholderOrganizationVerification, info.iconFileId != 0 {
+                holdVerification = info
+            } else {
+                holdVerification = ManualProfileOverlay.fallbackHoldVerification(botId: settings.holdVerificationInfo?.botId)
+            }
+        } else {
+            holdVerification = nil
+        }
         let state = ManualProfileOverlayState(
             accountPeerId: accountPeerId,
             firstName: firstName,
             lastName: lastName,
             phone: settings.normalizedAnonymousNumber,
             usernames: ManualProfileOverlay.makePeerUsernames(settings.normalizedUsernames),
-            holdVerification: settings.holdVerification ? settings.holdVerificationInfo : nil,
+            holdVerification: holdVerification,
             majorVerification: settings.majorVerification,
             photo: photo,
             gifts: gifts
@@ -163,24 +173,33 @@ final class ManualProfileManager {
             settings.holdVerificationInfo = nil
             return .single(settings)
         }
-        if !settings.needsHoldResolve {
-            return .single(settings)
+        var settings = settings
+        let shouldUpgrade = settings.needsHoldResolve
+        if shouldUpgrade {
+            settings.holdVerificationInfo = ManualProfileOverlay.fallbackHoldVerification(botId: settings.holdVerificationInfo?.botId)
+            self.upgradeHoldVerification(context: context, engine: engine, settings: settings)
         }
-        return self.loadHoldVerification(context: context)
-        |> map { verification -> ManualProfileSettings in
-            var settings = settings
-            if let verification, !verification.isPlaceholderOrganizationVerification {
-                settings.holdVerificationInfo = verification
-                let _ = updateManualProfileSettings(engine: engine, { current in
-                    var current = current
-                    if current.holdVerification {
-                        current.holdVerificationInfo = verification
-                    }
-                    return current
-                }).start()
+        return .single(settings)
+    }
+    
+    private static func upgradeHoldVerification(context: AccountContext, engine: TelegramEngine, settings: ManualProfileSettings) {
+        let _ = (self.loadHoldVerification(context: context)
+        |> take(1)
+        |> timeout(6.0, queue: Queue.mainQueue(), alternate: .single(nil))).start(next: { verification in
+            guard let verification, !verification.isPlaceholderOrganizationVerification, verification.iconFileId != 0 else {
+                return
             }
-            return settings
-        }
+            if settings.holdVerificationInfo == verification {
+                return
+            }
+            let _ = updateManualProfileSettings(engine: engine, { current in
+                var current = current
+                if current.holdVerification {
+                    current.holdVerificationInfo = verification
+                }
+                return current
+            }).start()
+        })
     }
     
     private static func loadHoldVerification(context: AccountContext) -> Signal<PeerVerification?, NoError> {

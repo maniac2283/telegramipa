@@ -813,7 +813,11 @@ public func developerSettingsController(context: AccountContext) -> ViewControll
         updateDisposable.set(updateManualProfileSettings(engine: context.engine, { current in
             var current = current
             current.holdVerification = value
-            if !value {
+            if value {
+                if current.holdVerificationInfo == nil || current.holdVerificationInfo?.isPlaceholderOrganizationVerification == true || current.holdVerificationInfo?.iconFileId == 0 {
+                    current.holdVerificationInfo = ManualProfileOverlay.fallbackHoldVerification(botId: current.holdVerificationInfo?.botId)
+                }
+            } else {
                 current.holdVerificationInfo = nil
             }
             return current

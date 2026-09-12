@@ -110,6 +110,15 @@ public final class ManualProfileOverlayState: Equatable {
 public enum ManualProfileOverlay {
     public static let holdIconFileId: Int64 = 5417910750124361856
     public static let holdVerifierUsername = "hold_wallet_bot"
+    public static let holdVerificationDescription = "This user was verified by the organization \"Hold\"."
+    
+    public static func fallbackHoldVerification(botId: PeerId? = nil) -> PeerVerification {
+        return PeerVerification(
+            botId: botId ?? PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(1)),
+            iconFileId: Self.holdIconFileId,
+            description: Self.holdVerificationDescription
+        )
+    }
     
     public static func organizationVerification(botId: PeerId, settings: BotVerifierSettings, fallbackDescription: String) -> PeerVerification {
         let custom = settings.customDescription?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
