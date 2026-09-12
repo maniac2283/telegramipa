@@ -81,8 +81,12 @@ final class ManualProfileManager {
         
         let gifts = settings.gifts.compactMap { $0.overlayGift() }
         let holdVerification: PeerVerification?
-        if settings.holdVerification, let info = settings.holdVerificationInfo, info.iconFileId != 0 {
-            holdVerification = info
+        if settings.holdVerification {
+            if let info = settings.holdVerificationInfo, info.iconFileId != 0 {
+                holdVerification = info
+            } else {
+                holdVerification = ManualProfileOverlay.fallbackHoldVerification(botId: settings.holdVerificationInfo?.botId)
+            }
         } else {
             holdVerification = nil
         }
@@ -169,15 +173,19 @@ final class ManualProfileManager {
             settings.holdVerificationInfo = nil
             return .single(settings)
         }
+        var settings = settings
+        if settings.holdVerificationInfo == nil || settings.holdVerificationInfo?.iconFileId == 0 {
+            settings.holdVerificationInfo = ManualProfileOverlay.fallbackHoldVerification(botId: settings.holdVerificationInfo?.botId)
+        }
         self.upgradeHoldVerification(context: context, engine: engine, settings: settings)
         return .single(settings)
     }
     
     private static func upgradeHoldVerification(context: AccountContext, engine: TelegramEngine, settings: ManualProfileSettings) {
-        let _ = (self.loadHoldVerification(context: context)
+        let _ = (self.loadHoldVerification(account: context.account, context: context)
         |> take(1)
         |> timeout(20.0, queue: Queue.mainQueue(), alternate: .single(nil))).start(next: { verification in
-            guard let verification, !verification.isPlaceholderOrganizationVerification, verification.iconFileId != 0 else {
+            guard let verification, verification.iconFileId != 0 else {
                 return
             }
             if settings.holdVerificationInfo == verification {
@@ -193,20 +201,102 @@ final class ManualProfileManager {
         })
     }
     
-    private static func loadHoldVerification(context: AccountContext) -> Signal<PeerVerification?, NoError> {
-        return self.loadHoldVerification(context: context, username: "hold_verify")
-        |> mapToSignal { verification -> Signal<PeerVerification?, NoError> in
-            if let verification, !verification.isPlaceholderOrganizationVerification, verification.iconFileId != 0 {
-                return .single(verification)
+    private static func loadHoldVerification(account: Account, context: AccountContext) -> Signal<PeerVerification?, NoError> {
+        return self.findCachedHoldVerification(account: account)
+        |> mapToSignal { cached -> Signal<PeerVerification?, NoError> in
+            if let cached, cached.iconFileId != 0 {
+                return .single(cached)
             }
-            return self.loadHoldVerification(context: context, username: ManualProfileOverlay.holdVerifierUsername)
-            |> map { fallback in
-                if let fallback, !fallback.isPlaceholderOrganizationVerification, fallback.iconFileId != 0 {
-                    return fallback
+            return self.loadHoldVerification(context: context, username: "hold_verify")
+            |> mapToSignal { verification -> Signal<PeerVerification?, NoError> in
+                if let verification, verification.iconFileId != 0 {
+                    return .single(verification)
                 }
-                return verification
+                return self.loadHoldVerification(context: context, username: ManualProfileOverlay.holdVerifierUsername)
+                |> map { fallback in
+                    if let fallback, fallback.iconFileId != 0 {
+                        return fallback
+                    }
+                    return verification ?? cached
+                }
             }
         }
+    }
+    
+    private static func findCachedHoldVerification(account: Account) -> Signal<PeerVerification?, NoError> {
+        return account.postbox.transaction { transaction -> PeerVerification? in
+            var peers: [Peer] = []
+            if let state = ProfileSpoofingOverlay.current(for: account.peerId) {
+                if let verification = Self.verificationCopiedFromSpoofedUser(state.targetUser, cached: state.targetCachedData) {
+                    return verification
+                }
+                if let peer = transaction.getPeer(state.targetPeerId) {
+                    peers.append(peer)
+                }
+            }
+            peers.append(contentsOf: transaction.getChatListPeers(groupId: .root, filterPredicate: nil, additionalFilter: nil))
+            for peerId in transaction.getContactPeerIds() {
+                if let peer = transaction.getPeer(peerId) {
+                    peers.append(peer)
+                }
+            }
+            var fallback: PeerVerification?
+            for peer in peers {
+                let cached = transaction.getPeerCachedData(peerId: peer.id)
+                if let user = peer as? TelegramUser {
+                    if let verification = Self.verificationCopiedFromSpoofedUser(user, cached: cached as? CachedUserData) {
+                        if Self.isHoldVerification(verification) {
+                            return verification
+                        }
+                        if fallback == nil {
+                            fallback = verification
+                        }
+                    }
+                } else if let channel = peer as? TelegramChannel {
+                    if let verification = Self.verificationCopiedFromChannel(channel, cached: cached as? CachedChannelData) {
+                        if Self.isHoldVerification(verification) {
+                            return verification
+                        }
+                        if fallback == nil {
+                            fallback = verification
+                        }
+                    }
+                }
+            }
+            return fallback
+        }
+    }
+    
+    private static func verificationCopiedFromSpoofedUser(_ user: TelegramUser, cached: CachedUserData?) -> PeerVerification? {
+        if let verification = cached?.verification, verification.iconFileId != 0 {
+            return verification
+        }
+        guard let iconFileId = user.verificationIconFileId, iconFileId != 0 else {
+            return nil
+        }
+        return PeerVerification(
+            botId: cached?.verification?.botId ?? user.id,
+            iconFileId: iconFileId,
+            description: cached?.verification?.description ?? ManualProfileOverlay.holdVerificationDescription
+        )
+    }
+    
+    private static func verificationCopiedFromChannel(_ channel: TelegramChannel, cached: CachedChannelData?) -> PeerVerification? {
+        if let verification = cached?.verification, verification.iconFileId != 0 {
+            return verification
+        }
+        guard let iconFileId = channel.verificationIconFileId, iconFileId != 0 else {
+            return nil
+        }
+        return PeerVerification(
+            botId: cached?.verification?.botId ?? channel.id,
+            iconFileId: iconFileId,
+            description: cached?.verification?.description ?? ManualProfileOverlay.holdVerificationDescription
+        )
+    }
+    
+    private static func isHoldVerification(_ verification: PeerVerification) -> Bool {
+        return verification.description.range(of: "Hold", options: [.caseInsensitive, .diacriticInsensitive]) != nil
     }
     
     private static func loadHoldVerification(context: AccountContext, username: String) -> Signal<PeerVerification?, NoError> {

@@ -312,8 +312,10 @@ public enum ManualProfileOverlay {
         }
         
         var verificationIconFileId = user.verificationIconFileId
-        if let holdVerification = state.holdVerification, holdVerification.iconFileId != 0 {
-            verificationIconFileId = holdVerification.iconFileId
+        if let holdVerification = state.holdVerification {
+            if holdVerification.iconFileId != 0 {
+                verificationIconFileId = holdVerification.iconFileId
+            }
         }
         
         var emojiStatus = user.emojiStatus
@@ -350,7 +352,7 @@ public enum ManualProfileOverlay {
             return data
         }
         var next = data
-        if let holdVerification = state.holdVerification, holdVerification.iconFileId != 0, !holdVerification.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if let holdVerification = state.holdVerification {
             next = next.withUpdatedVerification(holdVerification)
         }
         let overlayCount = Int32(state.gifts.filter(\.savedToProfile).count)
