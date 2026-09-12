@@ -81,12 +81,8 @@ final class ManualProfileManager {
         
         let gifts = settings.gifts.compactMap { $0.overlayGift() }
         let holdVerification: PeerVerification?
-        if settings.holdVerification {
-            if let info = settings.holdVerificationInfo, !info.isPlaceholderOrganizationVerification, info.iconFileId != 0 {
-                holdVerification = info
-            } else {
-                holdVerification = ManualProfileOverlay.fallbackHoldVerification(botId: settings.holdVerificationInfo?.botId)
-            }
+        if settings.holdVerification, let info = settings.holdVerificationInfo, info.iconFileId != 0 {
+            holdVerification = info
         } else {
             holdVerification = nil
         }
@@ -173,10 +169,6 @@ final class ManualProfileManager {
             settings.holdVerificationInfo = nil
             return .single(settings)
         }
-        var settings = settings
-        if settings.holdVerificationInfo == nil || settings.holdVerificationInfo?.isPlaceholderOrganizationVerification == true || settings.holdVerificationInfo?.iconFileId == 0 {
-            settings.holdVerificationInfo = ManualProfileOverlay.fallbackHoldVerification(botId: settings.holdVerificationInfo?.botId)
-        }
         self.upgradeHoldVerification(context: context, engine: engine, settings: settings)
         return .single(settings)
     }
@@ -229,10 +221,7 @@ final class ManualProfileManager {
                 return self.verification(from: view, peer: peer, context: context)
             }
             |> filter { verification in
-                if let verification, !verification.isPlaceholderOrganizationVerification, verification.iconFileId != 0 {
-                    return true
-                }
-                return false
+                return verification?.iconFileId != 0 && !(verification?.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
             }
             |> take(1)
             |> timeout(8.0, queue: Queue.mainQueue(), alternate: .single(nil))
@@ -240,24 +229,21 @@ final class ManualProfileManager {
     }
     
     private static func verification(from view: PeerView, peer: EnginePeer, context: AccountContext) -> PeerVerification? {
-        let fallbackCompany = "Hold"
+        if let verification = (view.cachedData as? CachedUserData)?.verification ?? (view.cachedData as? CachedChannelData)?.verification, verification.iconFileId != 0, !verification.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return verification
+        }
         switch peer {
         case let .user(user):
-            let cached = view.cachedData as? CachedUserData
-            if let verification = cached?.verification, !verification.isPlaceholderOrganizationVerification {
-                return verification
-            }
-            if let settings = cached?.botInfo?.verifierSettings {
-                let company = settings.companyName.isEmpty ? fallbackCompany : settings.companyName
+            if let settings = (view.cachedData as? CachedUserData)?.botInfo?.verifierSettings, settings.iconFileId != 0 {
+                let company = settings.companyName.isEmpty ? "Hold" : settings.companyName
                 let localized = context.sharedContext.currentPresentationData.with { $0 }.strings.BotVerification_Verify_Placeholder(company).string
                 return ManualProfileOverlay.organizationVerification(botId: user.id, settings: settings, fallbackDescription: localized)
             }
-        case .channel:
-            if let verification = (view.cachedData as? CachedChannelData)?.verification, !verification.isPlaceholderOrganizationVerification {
-                return verification
-            }
         default:
             break
+        }
+        if let iconFileId = peer.verificationIconFileId, iconFileId != 0 {
+            return PeerVerification(botId: peer.id, iconFileId: iconFileId, description: ManualProfileOverlay.holdVerificationDescription)
         }
         return nil
     }

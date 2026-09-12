@@ -12,7 +12,6 @@ import ItemListPeerItem
 import DeviceAccess
 import TelegramStringFormatting
 import PeerNameColorItem
-import TextFormat
 
 enum SettingsSection: Int, CaseIterable {
     case edit
@@ -151,9 +150,6 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
         items[.myProfile]!.append(PeerInfoScreenDisclosureItem(id: 0, text: presentationData.strings.Settings_MyProfile, icon: PresentationResourcesSettings.myProfile, action: {
             interaction.openSettings(.profile)
         }))
-        if let verification = (data.cachedData as? CachedUserData)?.verification {
-            items[.myProfile]!.append(peerInfoVerificationScreenItem(id: 1, context: context, presentationData: presentationData, interaction: interaction, verification: verification))
-        }
         
         if !settings.proxySettings.servers.isEmpty {
             let proxyType: String

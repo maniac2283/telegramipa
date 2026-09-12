@@ -124,7 +124,7 @@ public enum ManualProfileOverlay {
         let custom = settings.customDescription?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return PeerVerification(
             botId: botId,
-            iconFileId: settings.iconFileId != 0 ? settings.iconFileId : Self.holdIconFileId,
+            iconFileId: settings.iconFileId,
             description: custom.isEmpty ? fallbackDescription : custom
         )
     }
@@ -312,7 +312,7 @@ public enum ManualProfileOverlay {
         }
         
         var verificationIconFileId = user.verificationIconFileId
-        if let holdVerification = state.holdVerification {
+        if let holdVerification = state.holdVerification, holdVerification.iconFileId != 0 {
             verificationIconFileId = holdVerification.iconFileId
         }
         
@@ -350,7 +350,7 @@ public enum ManualProfileOverlay {
             return data
         }
         var next = data
-        if let holdVerification = state.holdVerification {
+        if let holdVerification = state.holdVerification, holdVerification.iconFileId != 0, !holdVerification.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             next = next.withUpdatedVerification(holdVerification)
         }
         let overlayCount = Int32(state.gifts.filter(\.savedToProfile).count)
