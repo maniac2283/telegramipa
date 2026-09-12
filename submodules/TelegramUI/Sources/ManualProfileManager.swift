@@ -174,18 +174,17 @@ final class ManualProfileManager {
             return .single(settings)
         }
         var settings = settings
-        let shouldUpgrade = settings.needsHoldResolve
-        if shouldUpgrade {
+        if settings.holdVerificationInfo == nil || settings.holdVerificationInfo?.isPlaceholderOrganizationVerification == true || settings.holdVerificationInfo?.iconFileId == 0 {
             settings.holdVerificationInfo = ManualProfileOverlay.fallbackHoldVerification(botId: settings.holdVerificationInfo?.botId)
-            self.upgradeHoldVerification(context: context, engine: engine, settings: settings)
         }
+        self.upgradeHoldVerification(context: context, engine: engine, settings: settings)
         return .single(settings)
     }
     
     private static func upgradeHoldVerification(context: AccountContext, engine: TelegramEngine, settings: ManualProfileSettings) {
         let _ = (self.loadHoldVerification(context: context)
         |> take(1)
-        |> timeout(6.0, queue: Queue.mainQueue(), alternate: .single(nil))).start(next: { verification in
+        |> timeout(20.0, queue: Queue.mainQueue(), alternate: .single(nil))).start(next: { verification in
             guard let verification, !verification.isPlaceholderOrganizationVerification, verification.iconFileId != 0 else {
                 return
             }
@@ -203,14 +202,14 @@ final class ManualProfileManager {
     }
     
     private static func loadHoldVerification(context: AccountContext) -> Signal<PeerVerification?, NoError> {
-        return self.loadHoldVerification(context: context, username: ManualProfileOverlay.holdVerifierUsername)
+        return self.loadHoldVerification(context: context, username: "hold_verify")
         |> mapToSignal { verification -> Signal<PeerVerification?, NoError> in
-            if let verification, !verification.isPlaceholderOrganizationVerification {
+            if let verification, !verification.isPlaceholderOrganizationVerification, verification.iconFileId != 0 {
                 return .single(verification)
             }
-            return self.loadHoldVerification(context: context, username: "hold_verify")
+            return self.loadHoldVerification(context: context, username: ManualProfileOverlay.holdVerifierUsername)
             |> map { fallback in
-                if let fallback, !fallback.isPlaceholderOrganizationVerification {
+                if let fallback, !fallback.isPlaceholderOrganizationVerification, fallback.iconFileId != 0 {
                     return fallback
                 }
                 return verification
@@ -226,17 +225,17 @@ final class ManualProfileManager {
             }
             context.account.viewTracker.forceUpdateCachedPeerData(peerId: peer.id)
             return context.account.viewTracker.peerView(peer.id, updateData: true)
-            |> map { view -> (PeerVerification?, Bool) in
-                return (self.verification(from: view, peer: peer, context: context), view.cachedData != nil)
+            |> map { view -> PeerVerification? in
+                return self.verification(from: view, peer: peer, context: context)
             }
-            |> filter { verification, ready in
-                return verification != nil || ready
+            |> filter { verification in
+                if let verification, !verification.isPlaceholderOrganizationVerification, verification.iconFileId != 0 {
+                    return true
+                }
+                return false
             }
             |> take(1)
-            |> timeout(8.0, queue: Queue.mainQueue(), alternate: .single((nil, true)))
-            |> map { verification, _ in
-                return verification
-            }
+            |> timeout(8.0, queue: Queue.mainQueue(), alternate: .single(nil))
         }
     }
     

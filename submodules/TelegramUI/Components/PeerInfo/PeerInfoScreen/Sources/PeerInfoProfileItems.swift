@@ -20,6 +20,32 @@ import BoostLevelIconComponent
 private let enabledPublicBioEntities: EnabledEntityTypes = [.allUrl, .mention, .hashtag]
 private let enabledPrivateBioEntities: EnabledEntityTypes = [.internalUrl, .mention, .hashtag]
 
+func peerInfoVerificationScreenItem(
+    id: Int,
+    context: AccountContext,
+    presentationData: PresentationData,
+    interaction: PeerInfoInteraction,
+    verification: PeerVerification
+) -> PeerInfoScreenItem {
+    let descriptionString = verification.description
+    let entities = generateTextEntities(descriptionString, enabledTypes: [.allUrl])
+    let description: String
+    if let entity = entities.first {
+        let range = NSRange(location: entity.range.lowerBound, length: entity.range.upperBound - entity.range.lowerBound)
+        let url = (descriptionString as NSString).substring(with: range)
+        description = descriptionString.replacingOccurrences(of: url, with: "[\(url)](\(url))")
+    } else {
+        description = descriptionString
+    }
+    let attributedPrefix = NSMutableAttributedString(string: "  ")
+    attributedPrefix.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: verification.iconFileId, file: nil), range: NSMakeRange(0, 1))
+    return PeerInfoScreenCommentItem(id: id, text: description, attributedPrefix: attributedPrefix, useAccentLinkColor: false, linkAction: { action in
+        if case let .tap(url) = action, let navigationController = interaction.getController()?.navigationController as? NavigationController {
+            context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: url, forceExternal: false, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
+        }
+    })
+}
+
 enum InfoSection: Int, CaseIterable {
     case unofficial
     case community
@@ -382,6 +408,10 @@ func infoItems(
             }
         }
         
+        if let verification = (data.cachedData as? CachedUserData)?.verification {
+            items[currentPeerInfoSection]!.append(peerInfoVerificationScreenItem(id: ItemVerification, context: context, presentationData: presentationData, interaction: interaction, verification: verification))
+        }
+        
         if !isMyProfile {
             if !data.isContact, user.botInfo == nil {
                 items[currentPeerInfoSection]!.append(PeerInfoScreenActionItem(id: ItemAddToContacts, text: presentationData.strings.PeerInfo_AddToContacts, action: {
@@ -508,26 +538,7 @@ func infoItems(
                     }))
                 }
                                 
-                if let verification = (data.cachedData as? CachedUserData)?.verification {
-                    let description: String
-                    let descriptionString = verification.description
-                    let entities = generateTextEntities(descriptionString, enabledTypes: [.allUrl])
-                    if let entity = entities.first {
-                        let range = NSRange(location: entity.range.lowerBound, length: entity.range.upperBound - entity.range.lowerBound)
-                        let url = (descriptionString as NSString).substring(with: range)
-                        description = descriptionString.replacingOccurrences(of: url, with: "[\(url)](\(url))")
-                    } else {
-                        description = descriptionString
-                    }
-                    let attributedPrefix = NSMutableAttributedString(string: "  ")
-                    attributedPrefix.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: verification.iconFileId, file: nil), range: NSMakeRange(0, 1))
-                    
-                    items[currentPeerInfoSection]!.append(PeerInfoScreenCommentItem(id: ItemVerification, text: description, attributedPrefix: attributedPrefix, useAccentLinkColor: false, linkAction: { action in
-                        if case let .tap(url) = action, let navigationController = interaction.getController()?.navigationController as? NavigationController {
-                            context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: url, forceExternal: false, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
-                        }
-                    }))
-                } else if let botInfo = user.botInfo, botInfo.flags.contains(.worksWithGroups) {
+                if (data.cachedData as? CachedUserData)?.verification == nil, let botInfo = user.botInfo, botInfo.flags.contains(.worksWithGroups) {
                     items[currentPeerInfoSection]!.append(PeerInfoScreenActionItem(id: ItemBotAddToChat, text: presentationData.strings.Bot_AddToChat, color: .accent, action: {
                         interaction.openAddBotToGroup()
                     }))
